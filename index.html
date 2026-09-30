@@ -302,6 +302,23 @@ textarea.inp{resize:vertical;min-height:70px}
   .tgrid{grid-template-columns:repeat(2,1fr)}
   .sgrid{grid-template-columns:repeat(3,1fr)}
 }
+
+/* ── Exam / Thi thử ── */
+.ex-timerbar{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;padding:6px 14px;border-radius:20px;background:var(--pur-l);color:var(--pur-d)}
+.ex-timerbar.warn{background:var(--amb-l);color:var(--amb)}
+.ex-timerbar.danger{background:var(--red-l);color:var(--red);animation:exPulse 1s infinite}
+@keyframes exPulse{0%,100%{opacity:1}50%{opacity:.55}}
+.ex-hdr{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.excard{background:var(--surf);border:1px solid var(--bord);border-radius:var(--r);padding:14px 16px;margin-bottom:10px}
+.exlvl-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:var(--surf3);color:var(--pur-d);margin-left:6px}
+/* Exam-mode: no instant reveal — neutralize ok/bad colors, hide feedback + manual Next button */
+body.exammode .obt.ok,body.exammode .obt.bad,
+body.exammode .tfbt.ok,body.exammode .tfbt.bad,
+body.exammode .phobt.ok,body.exammode .phobt.bad,
+body.exammode .fill-blank.ok,body.exammode .fill-blank.bad,
+body.exammode .img-obt.ok,body.exammode .img-obt.bad{background:var(--pur-l)!important;border-color:var(--pur-m)!important;color:var(--pur-d)!important}
+body.exammode #exam-body .fb{display:none!important}
+body.exammode #exam-body .nxbt{display:none!important}
 </style>
 </head>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -378,6 +395,30 @@ textarea.inp{resize:vertical;min-height:70px}
     if (typeof renderVocabTopicGrid === "function") renderVocabTopicGrid();
   }, err => console.error("vocabProgress onSnapshot error:", err));
 
+  window.CLOUD_EXAMS = [];
+  db.collection("exams").onSnapshot(snap => {
+    window.CLOUD_EXAMS = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
+    console.log("Cloud exams:", window.CLOUD_EXAMS.length);
+    if (typeof renderExamLevels === "function") renderExamLevels();
+    if (typeof renderExamList === "function") renderExamList();
+    if (typeof renderAdminExams === "function") renderAdminExams();
+  }, err => console.error("exams onSnapshot error:", err));
+
+  window.CLOUD_EXAMQS = [];
+  db.collection("examQuestions").onSnapshot(snap => {
+    window.CLOUD_EXAMQS = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
+    console.log("Cloud examQuestions:", window.CLOUD_EXAMQS.length);
+    if (typeof renderExamList === "function") renderExamList();
+    if (typeof renderExamQTable === "function") renderExamQTable();
+  }, err => console.error("examQuestions onSnapshot error:", err));
+
+  window.CLOUD_EXAMSCORES = [];
+  db.collection("examScores").onSnapshot(snap => {
+    window.CLOUD_EXAMSCORES = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
+    console.log("Cloud examScores:", window.CLOUD_EXAMSCORES.length);
+    if (typeof renderExamList === "function") renderExamList();
+  }, err => console.error("examScores onSnapshot error:", err));
+
   window.db = db;
   // Wrapper giữ nguyên chữ ký hàm kiểu modular SDK (v9+) mà phần code phía dưới
   // đang gọi (window.fb.addDoc, updateDoc, deleteDoc, doc, onSnapshot, getDocs...)
@@ -452,6 +493,7 @@ textarea.inp{resize:vertical;min-height:70px}
     <button class="nb" onclick="aTab('vocab')">🔤 Từ vựng</button>
     <button class="nb" onclick="aTab('students')">👩‍🎓 Học sinh</button>
     <button class="nb" onclick="aTab('scores')">📊 Điểm số</button>
+    <button class="nb" onclick="aTab('exams')">🏆 Thi thử</button>
   </div>
 
   <!-- Admin: Topics -->
@@ -546,6 +588,32 @@ textarea.inp{resize:vertical;min-height:70px}
       <div id="admin-scores-wrap"></div>
     </div>
   </div>
+
+  <!-- Admin: Exams (Thi thử) -->
+  <div id="at-exams" class="scr">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">
+        <h2 style="font-size:15px;font-weight:600">🏆 Đề thi thử</h2>
+        <div class="btn-row">
+          <button class="btn btn-teal btn-sm" onclick="seedIOEK4Exam()">📥 Nhập đề mẫu IOE K4 (CA1)</button>
+          <button class="btn btn-pur btn-sm" onclick="openExamModal()">+ Thêm đề</button>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--tx3);margin-bottom:14px">"Nhập đề mẫu" sẽ tạo 1 đề thi thử Cấp trường với các câu hỏi trích từ đề IOE K4 gốc bạn đã cung cấp (chỉ 1 lần, không tạo trùng).</p>
+      <div id="admin-exam-list"></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <h2 style="font-size:15px;font-weight:600">Câu hỏi theo đề</h2>
+        <button class="btn btn-pur btn-sm" onclick="addExamQFromAdmin()">+ Thêm câu vào đề đang chọn</button>
+      </div>
+      <div class="frow">
+        <select class="inp" id="eq-filter-exam" onchange="renderExamQTable()"><option value="">-- Chọn đề để xem câu hỏi --</option></select>
+        <input class="inp" id="eq-search" placeholder="Tìm câu hỏi..." oninput="renderExamQTable()" style="max-width:200px">
+      </div>
+      <div id="eq-table-wrap" style="overflow-x:auto"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ═══ STUDENT MAIN ═══ -->
@@ -558,6 +626,7 @@ textarea.inp{resize:vertical;min-height:70px}
     <button class="nb on" onclick="sTab('topics')">📚 Chủ đề</button>
     <button class="nb" onclick="sTab('vocab')">🔤 Từ vựng</button>
     <button class="nb" onclick="sTab('mix')">🔀 Ôn tổng hợp</button>
+    <button class="nb" onclick="sTab('exam')">🏆 Thi thử</button>
     <button class="nb" onclick="sTab('stats')">📊 Điểm số</button>
   </div>
   <div id="st-topics" class="scr on">
@@ -597,6 +666,20 @@ textarea.inp{resize:vertical;min-height:70px}
       <div id="sproglist"></div>
     </div>
   </div>
+  <div id="st-exam" class="scr">
+    <div class="card" id="exam-level-card">
+      <h2 style="font-size:15px;font-weight:600;margin-bottom:4px">🏆 Thi thử IOE</h2>
+      <p style="font-size:13px;color:var(--tx2);margin-bottom:14px">Chọn cấp thi đấu để xem các đề thi thử. Mỗi lần làm bài, câu hỏi và các lựa chọn sẽ được trộn ngẫu nhiên.</p>
+      <div class="tgrid" id="exam-level-grid"></div>
+    </div>
+    <div class="card" id="exam-list-card" style="display:none">
+      <div class="btn-row" style="margin-bottom:14px">
+        <button class="btn btn-sm" onclick="backToExamLevels()">← Chọn cấp khác</button>
+        <span id="exam-level-title" style="font-size:14px;font-weight:600"></span>
+      </div>
+      <div id="exam-list"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ═══ QUIZ ═══ -->
@@ -613,6 +696,26 @@ textarea.inp{resize:vertical;min-height:70px}
     </div>
     <div class="qprog"><div class="qpfill" id="qpfill" style="width:0%"></div></div>
     <div id="quiz-body"></div>
+  </div>
+</div>
+
+<!-- ═══ EXAM (THI THỬ) ═══ -->
+<div id="s-examquiz" class="scr">
+  <div class="card">
+    <div class="ex-hdr">
+      <div class="btn-row" style="margin:0">
+        <button class="btn btn-sm" onclick="exitExam()">← Thoát</button>
+        <span id="exam-quiz-title" style="font-size:14px;font-weight:600"></span>
+      </div>
+      <span class="ex-timerbar" id="ex-timer">30:00</span>
+    </div>
+    <div class="qhdr">
+      <span class="qtbadge" id="ex-badge"></span>
+      <span style="font-size:12px;color:var(--tx3)" id="ex-ctr"></span>
+      <span style="font-size:13px;font-weight:600;color:var(--teal)" id="ex-live"></span>
+    </div>
+    <div class="qprog"><div class="qpfill" id="ex-pfill" style="width:0%"></div></div>
+    <div id="exam-body"></div>
   </div>
 </div>
 
@@ -655,13 +758,21 @@ textarea.inp{resize:vertical;min-height:70px}
   <div class="modal">
     <h3 id="modal-q-title">Thêm câu hỏi</h3>
     <input type="hidden" id="mq-id">
-    <label class="lbl">Chủ đề</label>
-    <select class="inp" id="mq-topic"></select>
+    <input type="hidden" id="mq-bank" value="topic">
+    <div id="mq-topic-row">
+      <label class="lbl">Chủ đề</label>
+      <select class="inp" id="mq-topic"></select>
+    </div>
+    <div id="mq-exam-row" style="display:none">
+      <label class="lbl">Đề thi thử</label>
+      <select class="inp" id="mq-exam"></select>
+    </div>
     <label class="lbl">Dạng bài</label>
     <select class="inp" id="mq-type" onchange="renderQForm()">
       <option value="mcq">MCQ — Chọn đáp án đúng</option>
       <option value="fill">Fill — Điền thẳng vào câu</option>
       <option value="arrange">Arrange — Sắp xếp câu</option>
+      <option value="err-correct">Error Correction — Chọn phần gạch chân cần sửa</option>
       <option value="phonics">Phonics — Phiên âm</option>
       <option value="listen">Listen MCQ — Nghe và chọn</option>
       <option value="listen-tf">Listen TF — Nghe đúng/sai</option>
@@ -683,6 +794,27 @@ textarea.inp{resize:vertical;min-height:70px}
     <div class="modal-foot">
       <button class="btn" onclick="closeMod('modal-q')">Hủy</button>
       <button class="btn btn-pur" onclick="saveQ()">Lưu câu hỏi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Add/Edit Exam (Đề thi thử) ═══ -->
+<div class="modal-bg" id="modal-exam">
+  <div class="modal">
+    <h3 id="modal-exam-title">Thêm đề thi thử</h3>
+    <input type="hidden" id="me-id">
+    <label class="lbl">Cấp thi đấu</label>
+    <select class="inp" id="me-level"></select>
+    <label class="lbl">Tên đề (VD: Đề số 1 — CA1)</label>
+    <input class="inp" id="me-title" placeholder="Đề số 1 — CA1">
+    <label class="lbl">Thời gian làm bài (phút)</label>
+    <input class="inp" id="me-duration" type="number" min="1" max="180" value="30">
+    <label class="lbl">Thứ tự hiển thị</label>
+    <input class="inp" id="me-order" type="number" min="1" value="1">
+    <div class="err-msg" id="me-err">Vui lòng điền đầy đủ thông tin!</div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeMod('modal-exam')">Hủy</button>
+      <button class="btn btn-pur" onclick="saveExam()">Lưu đề thi</button>
     </div>
   </div>
 </div>
@@ -928,6 +1060,7 @@ function getTopicVocabStats(user,topicId){
 let currentUser=null;
 let quizQueue=[],quizIdx=0,quizCorrect=0,quizTopicId=null,isMix=false,mixCount=20;
 let arrangeState={placed:[],bank:[]};
+let examMode=false,examIdG=null,examTitleG="",examTimerId=null,examSecondsLeft=0,examDurationSec=1800,currentExamLevel=null;
 let currentAudio=null;
 let vocabQueue=[],vocabIdx=0,vocabTopicId=null,vocabMode="flip",vocabResults={known:0,mid:0,unknown:0};
 
@@ -1021,32 +1154,34 @@ function exitAdmin(){
 
 // ══════ ADMIN TABS ══════
 function aTab(t){
-  ["topics","questions","vocab","students","scores"].forEach(x=>{
+  ["topics","questions","vocab","students","scores","exams"].forEach(x=>{
     const el=document.getElementById("at-"+x);
     if(el)el.classList.remove("on");
   });
   document.getElementById("at-"+t).classList.add("on");
   document.querySelectorAll("#s-admin .nb").forEach((b,i)=>{
-    b.classList.toggle("on",["topics","questions","vocab","students","scores"][i]===t);
+    b.classList.toggle("on",["topics","questions","vocab","students","scores","exams"][i]===t);
   });
   if(t==="topics")renderAdminTopics();
   if(t==="questions"){populateQFilterTopics();renderQTable();}
   if(t==="vocab"){populateVocabFilterTopics();renderVocabTable();}
   if(t==="students")renderStudentList();
   if(t==="scores")renderAdminScores();
+  if(t==="exams"){renderAdminExams();populateExamFilterSelect();renderExamQTable();}
 }
 
 // ══════ STUDENT TABS ══════
 function sTab(t){
-  ["topics","vocab","mix","stats"].forEach(x=>document.getElementById("st-"+x).classList.remove("on"));
+  ["topics","vocab","mix","stats","exam"].forEach(x=>document.getElementById("st-"+x).classList.remove("on"));
   document.getElementById("st-"+t).classList.add("on");
   document.querySelectorAll("#s-main .nb").forEach((b,i)=>{
-    b.classList.toggle("on",["topics","vocab","mix","stats"][i]===t);
+    b.classList.toggle("on",["topics","vocab","mix","exam","stats"][i]===t);
   });
   if(t==="topics")renderTopicGrid();
   if(t==="vocab")renderVocabTopicGrid();
   if(t==="mix")renderMixStats();
   if(t==="stats")renderStats();
+  if(t==="exam")renderExamLevels();
 }
 
 // ══════ ADMIN: TOPICS ══════
@@ -1267,6 +1402,15 @@ const Q_FORMS={
     <div class="u-toolbar"><button type="button" class="u-btn" onclick="wrapUnderline('qf-opts')" title="Gạch chân">U̲</button></div>
     <textarea class="inp" id="qf-opts" rows="4" placeholder="r&lt;u&gt;a&lt;/u&gt;bbit&#10;b&lt;u&gt;ea&lt;/u&gt;r&#10;b&lt;u&gt;i&lt;/u&gt;rd&#10;l&lt;u&gt;io&lt;/u&gt;n"></textarea>
     <input type="hidden" id="qf-extra" value="">`,
+  "err-correct":`<label class="lbl">Câu đầy đủ (gạch chân 4 cụm cần cho học sinh chọn)</label>
+    <div class="u-toolbar"><button type="button" class="u-btn" onclick="wrapUnderline('qf-prompt')" title="Gạch chân">U̲</button><span class="u-hint">Bôi đen cụm từ → nhấn nút để gạch chân</span></div>
+    <textarea class="inp" id="qf-prompt" rows="2" placeholder="We go to school from &lt;u&gt;Mondays&lt;/u&gt; and Fridays."></textarea>
+    <label class="lbl">Cụm SAI cần sửa (copy đúng chữ đã gạch chân ở trên)</label>
+    <input class="inp" id="qf-answer" placeholder="Mondays">
+    <label class="lbl">Cả 4 cụm được gạch chân (mỗi dòng 1 cụm, gồm cụm sai)</label>
+    <textarea class="inp" id="qf-opts" rows="4" placeholder="go to&#10;and&#10;Mondays&#10;We"></textarea>
+    <label class="lbl">Giải thích (tuỳ chọn)</label>
+    <input class="inp" id="qf-extra" placeholder="Sửa lại: from Monday to Friday">`,
   listen:`<label class="lbl">Đáp án đúng</label>
   <input class="inp" id="qf-answer" placeholder="rabbit">
   <label class="lbl">Audio URL</label>
@@ -1440,17 +1584,24 @@ function rpMoveSubQ(i,dir){
   const j=i+dir;if(j<0||j>=rpSubQs.length)return;
   [rpSubQs[i],rpSubQs[j]]=[rpSubQs[j],rpSubQs[i]];rpRenderSubQs();
 }
-function openQModal(id){
+function openQModal(id,bank,presetExamId){
+  bank=bank||"topic";
+  document.getElementById("mq-bank").value=bank;
+  document.getElementById("mq-topic-row").style.display=bank==="topic"?"":"none";
+  document.getElementById("mq-exam-row").style.display=bank==="exam"?"":"none";
   const prevTopic=document.getElementById("mq-topic").value;
   populateQFilterTopics();
-  const q=id?getQs().find(x=>x.id===id):null;
+  if(bank==="exam")populateExamSelectForQForm();
+  const q=id?(bank==="exam"?getExamQs():getQs()).find(x=>x.id===id):null;
   document.getElementById("mq-id").value=id||"";
   document.getElementById("modal-q-title").textContent=id?"Sửa câu hỏi":"Thêm câu hỏi";
   document.getElementById("mq-err").classList.remove("on");
   if(q){
-    document.getElementById("mq-topic").value=q.topicId;
+    if(bank==="exam"){document.getElementById("mq-exam").value=q.examId;}else{document.getElementById("mq-topic").value=q.topicId;}
     document.getElementById("mq-type").value=q.type;
-  } else if(prevTopic){
+  } else if(bank==="exam"&&presetExamId){
+    document.getElementById("mq-exam").value=presetExamId;
+  } else if(bank==="topic"&&prevTopic){
     document.getElementById("mq-topic").value=prevTopic;
   }
   renderQForm();
@@ -1478,7 +1629,9 @@ function openQModal(id){
 }
 async function saveQ(){
   const id=document.getElementById("mq-id").value;
+  const bank=document.getElementById("mq-bank").value||"topic";
   const topicId=document.getElementById("mq-topic").value;
+  const examId=document.getElementById("mq-exam")?document.getElementById("mq-exam").value:"";
   const type=document.getElementById("mq-type").value;
   const fp=document.getElementById("qf-prompt");
   const fa=document.getElementById("qf-answer");
@@ -1509,19 +1662,21 @@ async function saveQ(){
   if(!prompt||!answer){document.getElementById("mq-err").classList.add("on");return;}
   const opts=optsRaw?(fo&&fo.type==="hidden"?optsRaw.split(","):optsRaw.split("\n")).map(x=>x.trim()).filter(Boolean):[];
   const fao=document.getElementById("qf-anyorder");const anyOrder=fao?fao.checked:false;
+  const collName=bank==="exam"?"examQuestions":"questions";
+  const bankField=bank==="exam"?{examId}:{topicId};
   if(id){
   
     const existing =
-      getQs().find(q => q.id === id);
+      (bank==="exam"?getExamQs():getQs()).find(q => q.id === id);
   
     await window.fb.updateDoc(
       window.fb.doc(
         window.db,
-        "questions",
+        collName,
         existing.firestoreId
       ),
       {
-        topicId,type,prompt,answer,opts,extra,audioUrl,anyOrder,
+        ...bankField,type,prompt,answer,opts,extra,audioUrl,anyOrder,
         ...(subQuestions!==undefined?{subQuestions,rpTitle}:{})
       }
     );
@@ -1531,18 +1686,18 @@ async function saveQ(){
     await window.fb.addDoc(
       window.fb.collection(
         window.db,
-        "questions"
+        collName
       ),
       {
-        id:"q"+Date.now(),
-        topicId,type,prompt,answer,opts,extra,audioUrl,anyOrder,
+        id:(bank==="exam"?"eq":"q")+Date.now(),
+        ...bankField,type,prompt,answer,opts,extra,audioUrl,anyOrder,
         ...(subQuestions!==undefined?{subQuestions,rpTitle}:{})
       }
     );
   
   }
   closeMod("modal-q");
-  renderQTable();
+  if(bank==="exam"){renderExamQTable();populateExamFilterSelect();}else{renderQTable();}
 }
 
 // ── CSV Import ──
@@ -2115,13 +2270,13 @@ function renderQ(){
   document.getElementById("q-ctr").textContent=(quizIdx+1)+" / "+total;
   document.getElementById("q-live").textContent="✓ "+quizCorrect;
   document.getElementById("qpfill").style.width=(quizIdx/total*100)+"%";
-  const labels={mcq:"Từ vựng",fill:"Điền từ",arrange:"Sắp xếp câu",phonics:"Phiên âm",listen:"Bài nghe","listen-tf":"Nghe Đúng/Sai","listen-fill":"Nghe Điền từ",tf:"Đúng / Sai",odd:"Odd one out","img-mcq":"Chọn ảnh","read-img":"Đọc + Ảnh","listen-img":"Nghe + Ảnh","pic-mcq":"Nhìn ảnh chọn chữ","mcq-multi":"Chọn nhiều đáp án","drag-fill":"Kéo thả từ","listen-multi":"Nghe + Chọn nhiều","img-fill":"Nhìn ảnh điền từ"};
+  const labels={mcq:"Từ vựng",fill:"Điền từ",arrange:"Sắp xếp câu",phonics:"Phiên âm","err-correct":"Sửa lỗi sai",listen:"Bài nghe","listen-tf":"Nghe Đúng/Sai","listen-fill":"Nghe Điền từ",tf:"Đúng / Sai",odd:"Odd one out","img-mcq":"Chọn ảnh","read-img":"Đọc + Ảnh","listen-img":"Nghe + Ảnh","pic-mcq":"Nhìn ảnh chọn chữ","mcq-multi":"Chọn nhiều đáp án","drag-fill":"Kéo thả từ","listen-multi":"Nghe + Chọn nhiều","img-fill":"Nhìn ảnh điền từ"};
   document.getElementById("qt-badge").textContent=labels[q.type]||q.type;
   const body=document.getElementById("quiz-body");
   if(q.type==="mcq"||q.type==="odd")body.innerHTML=renderMCQ(q);
   else if(q.type==="fill"){body.innerHTML=renderFill(q);setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);}
   else if(q.type==="arrange"){body.innerHTML=renderArrange(q);arrangeState={placed:[],bank:shuffled(q.answer.split(" "))||[]};renderArrState();}
-  else if(q.type==="phonics"){body.innerHTML=renderPhon(q);document.querySelectorAll(".phobt").forEach(b=>{const m=b.getAttribute("onclick").match(/checkPhon\(this,(.+?),(.+?)\)/);if(m){try{b._phVal=JSON.parse(m[1]);}catch(e){}}});}
+  else if(q.type==="phonics"||q.type==="err-correct"){body.innerHTML=renderPhon(q);document.querySelectorAll(".phobt").forEach(b=>{const m=b.getAttribute("onclick").match(/checkPhon\(this,(.+?),(.+?)\)/);if(m){try{b._phVal=JSON.parse(m[1]);}catch(e){}}});}
   else if(q.type==="listen")body.innerHTML=renderListen(q);
   else if(q.type==="listen-tf")body.innerHTML=renderListenTF(q);
   else if(q.type==="listen-fill"){body.innerHTML=renderListenFill(q);setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);}
@@ -2137,7 +2292,7 @@ function renderQ(){
   else if(q.type==="reading-passage"){body.innerHTML=renderReadingPassage(q);rpQuizInit(q);}
   else body.innerHTML=renderMCQ(q);
 }
-function nextQ(){quizIdx++;renderQ();}
+function nextQ(){quizIdx++;if(examMode){examRenderQ();}else{renderQ();}}
 
 // Render helpers
 function renderMCQ(q){
@@ -2893,6 +3048,318 @@ async function showResult(){
       <button class="btn" onclick="exitQuiz()">Về trang chủ</button>
     </div>
   </div>`;
+}
+
+// ══════════════════════════════════════════════
+// ══════ THI THỬ (MOCK TEST / EXAM MODE) ══════
+// ══════════════════════════════════════════════
+const EXAM_LEVELS=[
+  {id:"truong",name:"Cấp trường",emoji:"🏫"},
+  {id:"huyen",name:"Cấp huyện/quận",emoji:"🏙️"},
+  {id:"tinh",name:"Cấp tỉnh/thành",emoji:"🗺️"},
+  {id:"qg",name:"Cấp quốc gia",emoji:"🇻🇳"}
+];
+function getExams(){
+  if(window.CLOUD_EXAMS?.length){return window.CLOUD_EXAMS;}
+  return LS.get("vp2_exams",[]);
+}
+function saveExamsLocal(v){LS.set("vp2_exams",v);}
+function getExamQs(){
+  if(window.CLOUD_EXAMQS?.length){return window.CLOUD_EXAMQS;}
+  return LS.get("vp2_examqs",[]);
+}
+function saveExamQsLocal(v){LS.set("vp2_examqs",v);}
+function getExamScore(user,examId){
+  const row=window.CLOUD_EXAMSCORES?.find(x=>x.student===user&&x.examId===examId);
+  return row||{best:0,attempts:0};
+}
+async function setExamScore(user,examId,pct){
+  const existing=window.CLOUD_EXAMSCORES?.find(x=>x.student===user&&x.examId===examId);
+  const best=Math.max(existing?.best||0,pct);
+  const attempts=(existing?.attempts||0)+1;
+  const data={student:user,examId,best,attempts,last:pct,lastDate:Date.now()};
+  if(existing&&existing.firestoreId){
+    await window.fb.updateDoc(window.fb.doc(window.db,"examScores",existing.firestoreId),data);
+  }else{
+    await window.fb.addDoc(window.fb.collection(window.db,"examScores"),data);
+  }
+}
+
+// ── Student: chọn cấp → chọn đề ──
+function renderExamLevels(){
+  const grid=document.getElementById("exam-level-grid");
+  if(!grid)return;
+  const exams=getExams();
+  grid.innerHTML=EXAM_LEVELS.map(l=>{
+    const cnt=exams.filter(e=>e.levelId===l.id).length;
+    return `<div class="tcard" onclick="openExamLevel('${l.id}')"><div class="tc-em">${l.emoji}</div><div class="tc-name">${l.name}</div><div class="tc-meta">${cnt} đề</div></div>`;
+  }).join("");
+}
+function openExamLevel(levelId){
+  currentExamLevel=levelId;
+  document.getElementById("exam-level-card").style.display="none";
+  document.getElementById("exam-list-card").style.display="block";
+  const lvl=EXAM_LEVELS.find(l=>l.id===levelId);
+  document.getElementById("exam-level-title").textContent=lvl?lvl.emoji+" "+lvl.name:"";
+  renderExamList();
+}
+function backToExamLevels(){
+  document.getElementById("exam-level-card").style.display="block";
+  document.getElementById("exam-list-card").style.display="none";
+  renderExamLevels();
+}
+function renderExamList(){
+  const wrap=document.getElementById("exam-list");
+  if(!wrap||!currentExamLevel)return;
+  const exams=getExams().filter(e=>e.levelId===currentExamLevel).sort((a,b)=>(a.order||0)-(b.order||0));
+  if(!exams.length){wrap.innerHTML='<div class="empty">Chưa có đề thi thử nào ở cấp này. Thầy/cô có thể thêm trong mục Quản lý → 🏆 Thi thử.</div>';return;}
+  wrap.innerHTML=exams.map(e=>{
+    const qCount=getExamQs().filter(q=>q.examId===e.id).length;
+    const sc=currentUser?getExamScore(currentUser,e.id):{best:0,attempts:0};
+    return `<div class="excard">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:600;font-size:14px">${esc(e.title)}</div>
+          <div style="font-size:12px;color:var(--tx3);margin-top:3px">${qCount} câu · ⏱ ${e.durationMin||30} phút${sc.attempts?` · Đã làm ${sc.attempts} lần · Cao nhất <strong style="color:var(--teal)">${sc.best}%</strong>`:""}</div>
+        </div>
+        <button class="btn btn-pur btn-sm" onclick="startExam('${e.id}')" ${qCount?"":"disabled"}>Bắt đầu →</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ── Exam engine (reuses renderMCQ/renderFill/... and checkX() functions from practice mode) ──
+function startExam(examId){
+  const exam=getExams().find(e=>e.id===examId);
+  if(!exam)return;
+  const pool=getExamQs().filter(q=>q.examId===examId);
+  if(!pool.length){alert("Đề này chưa có câu hỏi!");return;}
+  examIdG=examId;examTitleG=exam.title;examMode=true;
+  document.getElementById("quiz-body").innerHTML=""; // avoid duplicate #fb/#nb ids with practice screen
+  document.body.classList.add("exammode");
+  quizQueue=shuffled(pool);quizIdx=0;quizCorrect=0;
+  examDurationSec=(exam.durationMin||30)*60;examSecondsLeft=examDurationSec;
+  document.getElementById("exam-quiz-title").textContent=exam.title;
+  showScr("s-examquiz");
+  examRenderQ();
+  examTickDisplay();
+  if(examTimerId)clearInterval(examTimerId);
+  examTimerId=setInterval(()=>{
+    examSecondsLeft--;
+    examTickDisplay();
+    if(examSecondsLeft<=0){clearInterval(examTimerId);examShowResult(true);}
+  },1000);
+}
+function examTickDisplay(){
+  const el=document.getElementById("ex-timer");if(!el)return;
+  const m=Math.floor(Math.max(0,examSecondsLeft)/60),s=Math.max(0,examSecondsLeft)%60;
+  el.textContent=(m<10?"0":"")+m+":"+(s<10?"0":"")+s;
+  el.classList.toggle("warn",examSecondsLeft<=300&&examSecondsLeft>60);
+  el.classList.toggle("danger",examSecondsLeft<=60);
+}
+function examRenderQ(){
+  const total=quizQueue.length;
+  if(quizIdx>=total){examShowResult(false);return;}
+  const q=quizQueue[quizIdx];
+  document.getElementById("ex-ctr").textContent=(quizIdx+1)+" / "+total;
+  document.getElementById("ex-live").textContent="✓ "+quizCorrect;
+  document.getElementById("ex-pfill").style.width=(quizIdx/total*100)+"%";
+  const labels={mcq:"Từ vựng",fill:"Điền từ",arrange:"Sắp xếp câu",phonics:"Phiên âm","err-correct":"Sửa lỗi sai",listen:"Bài nghe","listen-tf":"Nghe Đúng/Sai","listen-fill":"Nghe Điền từ",tf:"Đúng / Sai",odd:"Odd one out","img-mcq":"Chọn ảnh","read-img":"Đọc + Ảnh","listen-img":"Nghe + Ảnh","pic-mcq":"Nhìn ảnh chọn chữ","mcq-multi":"Chọn nhiều đáp án","drag-fill":"Kéo thả từ","listen-multi":"Nghe + Chọn nhiều","img-fill":"Nhìn ảnh điền từ","reading-passage":"Bài đọc"};
+  document.getElementById("ex-badge").textContent=labels[q.type]||q.type;
+  const body=document.getElementById("exam-body");
+  if(q.type==="mcq"||q.type==="odd")body.innerHTML=renderMCQ(q);
+  else if(q.type==="fill"){body.innerHTML=renderFill(q);setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);}
+  else if(q.type==="arrange"){body.innerHTML=renderArrange(q);arrangeState={placed:[],bank:shuffled(q.answer.split(" "))||[]};renderArrState();}
+  else if(q.type==="phonics"||q.type==="err-correct"){body.innerHTML=renderPhon(q);document.querySelectorAll(".phobt").forEach(b=>{const m=b.getAttribute("onclick").match(/checkPhon\(this,(.+?),(.+?)\)/);if(m){try{b._phVal=JSON.parse(m[1]);}catch(e){}}});}
+  else if(q.type==="listen")body.innerHTML=renderListen(q);
+  else if(q.type==="listen-tf")body.innerHTML=renderListenTF(q);
+  else if(q.type==="listen-fill"){body.innerHTML=renderListenFill(q);setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);}
+  else if(q.type==="tf")body.innerHTML=renderTF(q);
+  else if(q.type==="img-mcq")body.innerHTML=renderImgMCQ(q);
+  else if(q.type==="read-img")body.innerHTML=renderReadImg(q);
+  else if(q.type==="listen-img")body.innerHTML=renderListenImg(q);
+  else if(q.type==="pic-mcq")body.innerHTML=renderPicMCQ(q);
+  else if(q.type==="mcq-multi"){body.innerHTML=renderMCQMulti(q);}
+  else if(q.type==="drag-fill"){body.innerHTML=renderDragFill(q);initDragFill();}
+  else if(q.type==="listen-multi"){body.innerHTML=renderListenMulti(q);}
+  else if(q.type==="img-fill"){body.innerHTML=renderImgFill(q);setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);}
+  else if(q.type==="reading-passage"){body.innerHTML=renderReadingPassage(q);rpQuizInit(q);}
+  else body.innerHTML=renderMCQ(q);
+  // Exam mode: no instant reveal — auto-advance as soon as the answer is submitted (Next btn gets .on)
+  const nb=document.getElementById("nb");
+  if(nb){
+    const mo=new MutationObserver(()=>{
+      if(nb.classList.contains("on")){mo.disconnect();setTimeout(()=>{if(examMode)nextQ();},400);}
+    });
+    mo.observe(nb,{attributes:true,attributeFilter:["class"]});
+  }
+}
+async function examShowResult(timeUp){
+  if(examTimerId){clearInterval(examTimerId);examTimerId=null;}
+  examMode=false;
+  document.body.classList.remove("exammode");
+  const total=quizQueue.length;const pct=total?Math.round(quizCorrect/total*100):0;
+  if(currentUser)await setExamScore(currentUser,examIdG,pct);
+  document.getElementById("ex-pfill").style.width="100%";
+  const stars=pct>=90?"⭐⭐⭐":pct>=70?"⭐⭐":"⭐";
+  const msg=pct>=90?"Xuất sắc!":pct>=70?"Tốt lắm!":pct>=50?"Cần ôn thêm một chút!":"Xem lại và thử lại nhé!";
+  document.getElementById("exam-body").innerHTML=`<div class="res-wrap">
+    ${timeUp?'<div style="color:var(--red);font-weight:600;margin-bottom:8px">⏰ Hết giờ! Bài thi đã tự nộp.</div>':""}
+    <div class="res-pct">${pct}%</div>
+    <div class="res-lbl">${quizCorrect} / ${total} câu đúng — ${examTitleG}</div>
+    <div class="res-stars">${stars}</div>
+    <div style="color:var(--tx2);font-size:14px;margin-bottom:20px">${msg}</div>
+    <div class="btn-row" style="justify-content:center">
+      <button class="btn btn-pur" onclick="startExam('${examIdG}')">Làm lại</button>
+      <button class="btn" onclick="exitExam()">Về trang chủ</button>
+    </div>
+  </div>`;
+}
+function exitExam(){
+  if(examMode&&!confirm("Thoát bây giờ sẽ không lưu kết quả bài thi. Bạn chắc chứ?"))return;
+  if(examTimerId){clearInterval(examTimerId);examTimerId=null;}
+  examMode=false;
+  document.body.classList.remove("exammode");
+  window.speechSynthesis&&window.speechSynthesis.cancel();
+  document.getElementById("exam-body").innerHTML="";
+  showScr("s-main");sTab("exam");
+}
+
+// ── Admin: quản lý đề thi thử ──
+function renderAdminExams(){
+  const wrap=document.getElementById("admin-exam-list");
+  if(!wrap)return;
+  const exams=getExams().sort((a,b)=>(a.levelId>b.levelId?1:-1)||(a.order||0)-(b.order||0));
+  if(!exams.length){wrap.innerHTML='<div class="empty">Chưa có đề thi thử nào.</div>';return;}
+  wrap.innerHTML=`<table class="qtable">
+    <thead><tr><th>Cấp</th><th>Tên đề</th><th>Số câu</th><th>Thời gian</th><th></th></tr></thead>
+    <tbody>${exams.map(e=>{
+      const lvl=EXAM_LEVELS.find(l=>l.id===e.levelId);
+      const qCount=getExamQs().filter(q=>q.examId===e.id).length;
+      return `<tr>
+        <td style="white-space:nowrap">${lvl?lvl.emoji+" "+lvl.name:e.levelId}</td>
+        <td>${esc(e.title)}</td>
+        <td>${qCount}</td>
+        <td>${e.durationMin||30} phút</td>
+        <td><div class="btn-row">
+          <button class="btn btn-sm" onclick="openExamModal('${e.id}')">Sửa</button>
+          <button class="btn btn-sm btn-red" onclick="deleteExam('${e.id}')">Xóa</button>
+        </div></td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>`;
+}
+function openExamModal(id){
+  const lvlSel=document.getElementById("me-level");
+  lvlSel.innerHTML=EXAM_LEVELS.map(l=>`<option value="${l.id}">${l.emoji} ${l.name}</option>`).join("");
+  const e=id?getExams().find(x=>x.id===id):null;
+  document.getElementById("me-id").value=id||"";
+  document.getElementById("modal-exam-title").textContent=id?"Sửa đề thi thử":"Thêm đề thi thử";
+  document.getElementById("me-err").classList.remove("on");
+  document.getElementById("me-title").value=e?e.title:"";
+  document.getElementById("me-duration").value=e?(e.durationMin||30):30;
+  document.getElementById("me-order").value=e?(e.order||1):(getExams().length+1);
+  if(e)lvlSel.value=e.levelId;
+  openMod("modal-exam");
+}
+async function saveExam(){
+  const id=document.getElementById("me-id").value;
+  const levelId=document.getElementById("me-level").value;
+  const title=document.getElementById("me-title").value.trim();
+  const durationMin=parseInt(document.getElementById("me-duration").value)||30;
+  const order=parseInt(document.getElementById("me-order").value)||1;
+  if(!title){document.getElementById("me-err").classList.add("on");return;}
+  const data={levelId,title,durationMin,order};
+  if(id){
+    const existing=getExams().find(x=>x.id===id);
+    await window.fb.updateDoc(window.fb.doc(window.db,"exams",existing.firestoreId),data);
+  }else{
+    await window.fb.addDoc(window.fb.collection(window.db,"exams"),{id:"ex"+Date.now(),...data});
+  }
+  closeMod("modal-exam");
+  renderAdminExams();populateExamFilterSelect();
+}
+async function deleteExam(id){
+  if(!confirm("Xóa đề thi thử này? Các câu hỏi thuộc đề cũng nên được xóa riêng."))return;
+  const e=getExams().find(x=>x.id===id);
+  if(e?.firestoreId)await window.fb.deleteDoc(window.fb.doc(window.db,"exams",e.firestoreId));
+  renderAdminExams();populateExamFilterSelect();
+}
+
+// ── Admin: quản lý câu hỏi theo đề (dùng chung modal-q với bank="exam") ──
+function populateExamFilterSelect(){
+  const sel=document.getElementById("eq-filter-exam");
+  if(!sel)return;
+  const cur=sel.value;
+  const exams=getExams();
+  sel.innerHTML='<option value="">-- Chọn đề để xem câu hỏi --</option>'+exams.map(e=>{
+    const lvl=EXAM_LEVELS.find(l=>l.id===e.levelId);
+    return `<option value="${e.id}">${lvl?lvl.emoji:""} ${esc(e.title)}</option>`;
+  }).join("");
+  if(cur)sel.value=cur;
+}
+function populateExamSelectForQForm(){
+  const sel=document.getElementById("mq-exam");
+  if(!sel)return;
+  const exams=getExams();
+  sel.innerHTML=exams.map(e=>{
+    const lvl=EXAM_LEVELS.find(l=>l.id===e.levelId);
+    return `<option value="${e.id}">${lvl?lvl.emoji:""} ${esc(e.title)}</option>`;
+  }).join("");
+}
+function addExamQFromAdmin(){
+  const examId=document.getElementById("eq-filter-exam").value;
+  if(!examId){alert("Hãy chọn một đề thi thử trước!");return;}
+  openQModal(null,"exam",examId);
+}
+function renderExamQTable(){
+  const filterExam=document.getElementById("eq-filter-exam")?document.getElementById("eq-filter-exam").value:"";
+  const search=(document.getElementById("eq-search")?document.getElementById("eq-search").value:"").toLowerCase();
+  const wrap=document.getElementById("eq-table-wrap");
+  if(!wrap)return;
+  if(!filterExam){wrap.innerHTML='<div class="empty">Chọn một đề ở trên để xem/quản lý câu hỏi.</div>';return;}
+  let qs=getExamQs().filter(q=>q.examId===filterExam);
+  if(search)qs=qs.filter(q=>(q.prompt||"").toLowerCase().includes(search)||(q.answer||"").toLowerCase().includes(search));
+  if(!qs.length){wrap.innerHTML='<div class="empty">Đề này chưa có câu hỏi nào.</div>';return;}
+  wrap.innerHTML=`<table class="qtable">
+    <thead><tr><th>Dạng</th><th>Câu hỏi</th><th>Đáp án</th><th></th></tr></thead>
+    <tbody>${qs.map(q=>`<tr>
+      <td><span class="qtype-pill">${q.type}</span></td>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(q.prompt||"").replace(/<[^>]+>/g,"")}</td>
+      <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--teal);font-weight:600">${(q.answer||"").replace(/<[^>]+>/g,"")}</td>
+      <td><div class="btn-row">
+        <button class="btn btn-sm" onclick="openQModal('${q.id}','exam','${filterExam}')">Sửa</button>
+        <button class="btn btn-sm btn-red" onclick="deleteExamQ('${q.id}')">Xóa</button>
+      </div></td>
+    </tr>`).join("")}</tbody>
+  </table>`;
+}
+async function deleteExamQ(id){
+  if(!confirm("Xóa câu hỏi này?"))return;
+  const q=getExamQs().find(x=>x.id===id);
+  if(q?.firestoreId)await window.fb.deleteDoc(window.fb.doc(window.db,"examQuestions",q.firestoreId));
+  renderExamQTable();
+}
+
+// ── Admin: nhập đề mẫu IOE K4 (trích từ đề gốc CA1 bạn cung cấp) ──
+async function seedIOEK4Exam(){
+  if(!confirm("Nhập đề mẫu 'Đề số 1 — CA1 (IOE K4 gốc)' vào Cấp trường?\n\n133/200 câu (mcq, fill, sắp xếp câu, sửa lỗi sai, đúng/sai) đã được trích và gán đáp án từ đề gốc.\n~67 câu còn lại (dạng nghe/nhìn tranh) đề gốc không có audio/ảnh nên CHƯA nhập — cần bổ sung thủ công sau.\n\nChỉ nên bấm nút này 1 lần."))return;
+  const already=getExams().find(e=>e.seedKey==="ioe_k4_ca1_de1");
+  if(already){alert("Đề mẫu này đã được nhập trước đó rồi! Vào mục 'Câu hỏi theo đề' để xem/bổ sung.");return;}
+  const examData={id:"ex_ioe_k4_ca1_de1",levelId:"truong",title:"Đề số 1 — CA1 (trích đề IOE K4 gốc, 133/200 câu)",durationMin:30,order:1,seedKey:"ioe_k4_ca1_de1"};
+  await window.fb.addDoc(window.fb.collection(window.db,"exams"),examData);
+  const seedQs=[{"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "What do you do on Saturday?", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "This is an apple.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "It's blue and white.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "I'm flying a kite.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "When's your birthday?", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "They are singing songs.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "What can you see?", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "Can you ride a bike?", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "This is a train.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "There are twenty classrooms.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "Is this your brother?", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "He's in the classroom.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "Where are you from?", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "There is a garden near my house.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "There are eighteen classrooms in my school.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "I like listening to music.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "It is seven o'clock.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "It's Monday today.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "We play football after school.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "What time is it now? It's eight.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "Tim goes to school at eight.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "I have English and maths on Tuesday.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "Can Tom play tennis? Yes, he can.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "What is your bag colour?", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "We study maths at school.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "They study art and PE today.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "Where's the market? It's in town.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "The monkey is climbing a tree.", "opts": [], "extra": ""}, {"type": "arrange", "prompt": "Sắp xếp thành câu đúng", "answer": "What day is it today? It's a nice Wednesday morning.", "opts": [], "extra": ""}, {"type": "fill", "prompt": "Jenny is __ best friend. She is your friend too.", "answer": "my", "opts": [], "extra": ""}, {"type": "fill", "prompt": "My brothers go to bed __ ten o'clock.", "answer": "at", "opts": [], "extra": ""}, {"type": "fill", "prompt": "I'm from A__rica.", "answer": "f", "opts": [], "extra": ""}, {"type": "fill", "prompt": "Ms Hoa h__ breakfast at 6.30.", "answer": "as", "opts": [], "extra": ""}, {"type": "fill", "prompt": "There is __ apple on the table.", "answer": "an", "opts": [], "extra": ""}, {"type": "fill", "prompt": "C__ you skate? – No, I can't.", "answer": "an", "opts": [], "extra": ""}, {"type": "fill", "prompt": "My family often watch TV in t__ evening.", "answer": "he", "opts": [], "extra": ""}, {"type": "fill", "prompt": "She do__ her homework after school.", "answer": "es", "opts": [], "extra": ""}, {"type": "fill", "prompt": "I help my mom do housework __ Sundays.", "answer": "on", "opts": [], "extra": ""}, {"type": "fill", "prompt": "My best friend is from Bri___n.", "answer": "tai", "opts": [], "extra": ""}, {"type": "fill", "prompt": "My bir__day is in March.", "answer": "th", "opts": [], "extra": ""}, {"type": "fill", "prompt": "I go __ school at 7.15.", "answer": "to", "opts": [], "extra": ""}, {"type": "fill", "prompt": "We have a com__er room at school.", "answer": "put", "opts": [], "extra": ""}, {"type": "fill", "prompt": "My favourite subject is ma__.", "answer": "ths", "opts": [], "extra": ""}, {"type": "fill", "prompt": "My birthday is __ April.", "answer": "in", "opts": [], "extra": ""}, {"type": "fill", "prompt": "We go to school at se__n o'clock.", "answer": "ve", "opts": [], "extra": ""}, {"type": "fill", "prompt": "Birds have w__gs and feathers to fly.", "answer": "in", "opts": [], "extra": ""}, {"type": "fill", "prompt": "There is a gar___ behind the school.", "answer": "den", "opts": [], "extra": ""}, {"type": "fill", "prompt": "I h__ PE on Fridays.", "answer": "ave", "opts": [], "extra": ""}, {"type": "fill", "prompt": "Today is Wed__day.", "answer": "nes", "opts": [], "extra": ""}, {"type": "fill", "prompt": "We use a cl__k to tell the time.", "answer": "oc", "opts": [], "extra": ""}, {"type": "fill", "prompt": "I'm fr__ Japan.", "answer": "om", "opts": [], "extra": ""}, {"type": "fill", "prompt": "We should he_p our friends when they need it.", "answer": "l", "opts": [], "extra": ""}, {"type": "fill", "prompt": "A guitar has s__ strings.", "answer": "ix", "opts": [], "extra": ""}, {"type": "fill", "prompt": "This is Linda. She __ from Singapore.", "answer": "is", "opts": [], "extra": ""}, {"type": "fill", "prompt": "A __sh can breathe underwater.", "answer": "fi", "opts": [], "extra": ""}, {"type": "fill", "prompt": "My teacher gives me PE ___sons on Fridays.", "answer": "les", "opts": [], "extra": ""}, {"type": "fill", "prompt": "We don't go __ school at the weekend.", "answer": "to", "opts": [], "extra": ""}, {"type": "fill", "prompt": "W____'s your school? – It's in the city.", "answer": "here", "opts": [], "extra": ""}, {"type": "fill", "prompt": "A square has f___ equal sides.", "answer": "our", "opts": [], "extra": ""}, {"type": "fill", "prompt": "I drink orange j___e every day.", "answer": "uic", "opts": [], "extra": ""}, {"type": "fill", "prompt": "Linh can ride a h_____, but she can't ride a bike.", "answer": "orse", "opts": [], "extra": ""}, {"type": "fill", "prompt": "I love singing b_____e I want to be a singer.", "answer": "ecaus", "opts": [], "extra": ""}, {"type": "fill", "prompt": "My friends enjoy hiking in the m______ns.", "answer": "ountai", "opts": [], "extra": ""}, {"type": "fill", "prompt": "How m___ cakes do you want to buy? - Two.", "answer": "any", "opts": [], "extra": ""}, {"type": "fill", "prompt": "Tom has English on Mondays and T____days.", "answer": "hurs", "opts": [], "extra": ""}, {"type": "fill", "prompt": "There is a big play____und at my school.", "answer": "gro", "opts": [], "extra": ""}, {"type": "fill", "prompt": "T___e are four people in my family.", "answer": "her", "opts": [], "extra": ""}, {"type": "mcq", "prompt": "This is ____ apple.", "answer": "an", "opts": ["an", "the", "no article", "a"], "extra": ""}, {"type": "mcq", "prompt": "She can ________ very well. She makes delicious food for her family.", "answer": "cook", "opts": ["cook", "draw", "ski", "skate"], "extra": ""}, {"type": "mcq", "prompt": "Beethoven was a famous ____. He has a lot of famous music.", "answer": "musician", "opts": ["painter", "teacher", "musician", "writer"], "extra": ""}, {"type": "mcq", "prompt": "___ are five people in my family.", "answer": "There", "opts": ["There", "That", "These", "This"], "extra": ""}, {"type": "mcq", "prompt": "This is my pencil. That is ____.", "answer": "yours", "opts": ["you", "her", "your", "yours"], "extra": ""}, {"type": "mcq", "prompt": "Which underlined part sounds like 'w' in WHO?", "answer": "wind", "opts": ["water", "write", "wind", "week"], "extra": "Đáp án cần giáo viên nghe lại audio gốc để xác nhận"}, {"type": "mcq", "prompt": "The children are playing football in the ______.", "answer": "playground", "opts": ["restaurant", "playground", "computer room", "swimming pool"], "extra": ""}, {"type": "mcq", "prompt": "Can Julia play the piano?", "answer": "Yes, she can.", "opts": ["Yes, she can.", "No, she can.", "Yes, she does.", "Yes, she likes."], "extra": ""}, {"type": "mcq", "prompt": "How many syllables does the word \"tomorrow\" have?", "answer": "three", "opts": ["one", "two", "three", "four"], "extra": ""}, {"type": "mcq", "prompt": "_____ class are you in? - I'm in class 4A.", "answer": "What", "opts": ["How", "What", "Where", "When"], "extra": ""}, {"type": "mcq", "prompt": "Mary loves _____ pictures about animals.", "answer": "drawing", "opts": ["drawing", "dancing", "cooking", "playing"], "extra": ""}, {"type": "mcq", "prompt": "Choose the correct sentence.", "answer": "I have English on Monday.", "opts": ["I having English on Monday.", "I has English on Monday.", "I have English in Monday.", "I have English on Monday."], "extra": ""}, {"type": "mcq", "prompt": "____ do you want to drink? - I want some water.", "answer": "What", "opts": ["When", "What", "Where", "Why"], "extra": ""}, {"type": "mcq", "prompt": "Choose the correct question for the underlined part: The cat is under the chair.", "answer": "Where is the cat?", "opts": ["What is the cat doing?", "Where is the cat?", "When is the cat under the chair?", "Who is under the chair?"], "extra": ""}, {"type": "mcq", "prompt": "I have breakfast ____ seven o'clock.", "answer": "at", "opts": ["on", "with", "in", "at"], "extra": ""}, {"type": "mcq", "prompt": "Hi! I'm Jeny. I'm ____ Viet Nam.", "answer": "from", "opts": ["from", "at", "on", "of"], "extra": ""}, {"type": "mcq", "prompt": "My brother can ________. He makes nice pictures with pencils.", "answer": "draw", "opts": ["draw", "skate", "ski", "write"], "extra": ""}, {"type": "mcq", "prompt": "Which word has a different number of syllables?", "answer": "school", "opts": ["water", "morning", "school", "robot"], "extra": ""}, {"type": "mcq", "prompt": "The _______ is a place where we can read and borrow books.", "answer": "library", "opts": ["playground", "canteen", "library", "classroom"], "extra": ""}, {"type": "mcq", "prompt": "A: What's your name? – B: ____ name's Minh.", "answer": "My", "opts": ["He", "Mine", "My", "Your"], "extra": ""}, {"type": "mcq", "prompt": "We use our eyes to ____.", "answer": "see", "opts": ["hear", "see", "eat", "walk"], "extra": ""}, {"type": "mcq", "prompt": "There is _____ music room at our school.", "answer": "a", "opts": ["the", "no article", "an", "a"], "extra": ""}, {"type": "mcq", "prompt": "The children can _______ in the pool after school.", "answer": "swim", "opts": ["cook", "sleep", "write", "swim"], "extra": ""}, {"type": "mcq", "prompt": "Make a correct sentence: I / like / read / book /.", "answer": "I like reading a book.", "opts": ["I likes read a book.", "I like read a book.", "I like reading a book.", "I like reading book."], "extra": ""}, {"type": "mcq", "prompt": "Make a sentence: Mary / from / America.", "answer": "Mary is from America.", "opts": ["Mary is the America.", "Mary is on America.", "Mary is from America.", "Mary is America."], "extra": ""}, {"type": "mcq", "prompt": "Choose the CORRECT sentence.", "answer": "This is my bag.", "opts": ["This my bag.", "They are my bag.", "This are my bag.", "This is my bag."], "extra": ""}, {"type": "mcq", "prompt": "I can ____ a bird in the tree.", "answer": "see", "opts": ["to see", "seeing", "see", "sees"], "extra": ""}, {"type": "mcq", "prompt": "Bees make ____.", "answer": "honey", "opts": ["honey", "milk", "bread", "juice"], "extra": ""}, {"type": "mcq", "prompt": "Choose the correct question for the underlined part: Today is Friday. I go to school.", "answer": "What day is it today?", "opts": ["Which day is Friday?", "What day is it today?", "What date is it today?", "What do you do on Fridays?"], "extra": ""}, {"type": "mcq", "prompt": "Can you speak Vietnamese? - No, I ___.", "answer": "don't", "opts": ["can", "don't", "can't", "do"], "extra": ""}, {"type": "mcq", "prompt": "How many syllables does the word \"pencil\" have?", "answer": "two", "opts": ["two", "three", "four", "one"], "extra": ""}, {"type": "mcq", "prompt": "Which word has a different number of syllables?", "answer": "mouth", "opts": ["mouth", "tennis", "painter", "Thursday"], "extra": ""}, {"type": "mcq", "prompt": "Which animal likes to eat bananas?", "answer": "monkey", "opts": ["cat", "dog", "monkey", "fish"], "extra": ""}, {"type": "mcq", "prompt": "There ____ two computer rooms at my school.", "answer": "are", "opts": ["is", "have", "has", "are"], "extra": ""}, {"type": "mcq", "prompt": "Which one is a fruit?", "answer": "a mango", "opts": ["a mango", "a clock", "a mop", "a table"], "extra": ""}, {"type": "mcq", "prompt": "William can ____ very well.", "answer": "swim", "opts": ["swims", "swim", "is swimming", "swimming"], "extra": ""}, {"type": "mcq", "prompt": "Mai _____ playing the violin.", "answer": "likes", "opts": ["like", "doesn't like", "don't like", "likes"], "extra": ""}, {"type": "mcq", "prompt": "Make a correct sentence: Tom / often / go / swim / on / Sundays /.", "answer": "Tom often goes swimming on Sundays.", "opts": ["Tom often goes swimming on Sundays.", "Tom often go swimming on Sundays.", "Tom often goes to swim in Sundays.", "Tom often goes to swimming on Sundays."], "extra": ""}, {"type": "mcq", "prompt": "I often go to the library _______ Saturday morning.", "answer": "at", "opts": ["from", "in", "at", "on"], "extra": ""}, {"type": "mcq", "prompt": "How many people _____ in your family?", "answer": "are there", "opts": ["there are", "in there", "is there", "are there"], "extra": ""}, {"type": "mcq", "prompt": "_____ do you like art? – Because I want to be a painter.", "answer": "Why", "opts": ["Why", "Where", "When", "What"], "extra": ""}, {"type": "mcq", "prompt": "A _______ helps sick people feel better. He/She works in a hospital.", "answer": "doctor", "opts": ["teacher", "driver", "doctor", "farmer"], "extra": ""}, {"type": "mcq", "prompt": "What day is it today?", "answer": "It is Wednesday.", "opts": ["It is in Thursday.", "It is Wednesday.", "I have maths on Friday.", "It's May."], "extra": ""}, {"type": "mcq", "prompt": "We often study IT in the _______.", "answer": "computer room", "opts": ["computer room", "swimming pool", "art room", "playground"], "extra": ""}, {"type": "mcq", "prompt": "What's he doing? – He ____ a quiz with his friends.", "answer": "is doing", "opts": ["is doing", "do", "does", "doing"], "extra": ""}, {"type": "mcq", "prompt": "Choose the correct sentence.", "answer": "It's nine fifteen.", "opts": ["It's nine fifteen o'clock.", "It's nine fifteen.", "It's fifteen nine.", "It fifteen o'clock nine."], "extra": ""}, {"type": "mcq", "prompt": "What is fifteen plus ten?", "answer": "twenty-five", "opts": ["twenty-three", "twenty-four", "twenty-six", "twenty-five"], "extra": ""}, {"type": "mcq", "prompt": "We _______ at ten o'clock in the evening because we are sleepy.", "answer": "go to bed", "opts": ["have breakfast", "get up", "go to school", "go to bed"], "extra": ""}, {"type": "mcq", "prompt": "Six plus four equals ____.", "answer": "ten", "opts": ["nine", "ten", "eleven", "eight"], "extra": ""}, {"type": "mcq", "prompt": "Choose the correct question for the underlined part: My best friend is coming to my party tonight.", "answer": "Who is coming to my party?", "opts": ["Where is your best friend coming?", "When is your best friend coming?", "Who is coming to my party?", "What is your best friend doing tonight?"], "extra": ""}, {"type": "mcq", "prompt": "I want ____ milk for my breakfast.", "answer": "some", "opts": ["a", "some", "an", "many"], "extra": ""}, {"type": "mcq", "prompt": "What are the animals that live in the water?", "answer": "frogs, dolphins, and crabs", "opts": ["frogs, turtles, and cats", "snakes, hippos, dolphins", "ducks, crocodiles, tigers", "frogs, dolphins, and crabs"], "extra": ""}, {"type": "mcq", "prompt": "My friends often ____ football, but Nam ____ basketball after school.", "answer": "play - plays", "opts": ["play - plays", "play - play", "plays - play", "play - is playing"], "extra": ""}, {"type": "mcq", "prompt": "Mai's birthday is ____ May 1st, but her party is ____ the evening.", "answer": "on - in", "opts": ["at - in", "on - in", "in - on", "on - at"], "extra": ""}, {"type": "mcq", "prompt": "Minh likes doing ______ and _______ music with his friends after school.", "answer": "word puzzles - listening to", "opts": ["word puzzles - listening to", "table tennis - singing", "swimming - playing", "homework - making to"], "extra": "Cần giáo viên đối chiếu lại với đáp án gốc"}, {"type": "mcq", "prompt": "My sister wants to go outside to play, _______ it is raining heavily, _______ she stays inside and reads a book.", "answer": "but - so", "opts": ["but - so", "so - because", "because - but", "but - because"], "extra": ""}, {"type": "mcq", "prompt": "Make a correct sentence: Do / brother / ride / horse / or / play / guitar?", "answer": "Does your brother like riding a horse or playing the guitar?", "opts": ["Does your brother like to ride horse or play the guitar?", "Does your brother like riding a horse or playing the guitar?", "Does your brother like riding a horse or playing the guitar or not?", "Does your brother likes riding a horse or playing the guitar?"], "extra": ""}, {"type": "err-correct", "prompt": "We go to school from <u>Mondays</u> <u>and</u> <u>Fridays</u>. <u>We</u> go to school from Mondays and Fridays.", "answer": "Mondays", "opts": ["Mondays", "and", "Fridays", "We"], "extra": "Sửa lại: from Monday to Friday"}, {"type": "err-correct", "prompt": "<u>My</u> brother can <u>go</u> a horse <u>but</u> he can't ride a <u>bike</u>.", "answer": "go", "opts": ["bike", "but", "My", "go"], "extra": "Sửa lại: can ride a horse"}, {"type": "err-correct", "prompt": "<u>How many</u> computer rooms <u>is</u> there <u>at</u> your school?", "answer": "is", "opts": ["at", "How many", "is", "rooms"], "extra": "Sửa lại: are there"}, {"type": "err-correct", "prompt": "<u>England</u> is my <u>favourite</u> subject <u>because</u> I want to <u>talk with</u> foreign friends.", "answer": "England", "opts": ["because", "favourite", "England", "talk with"], "extra": "Sửa lại: English"}, {"type": "err-correct", "prompt": "Minh <u>like</u> music <u>because</u> he <u>wants</u> to <u>be</u> a singer.", "answer": "like", "opts": ["wants", "like", "be", "because"], "extra": "Sửa lại: likes"}, {"type": "err-correct", "prompt": "Maths is my <u>sister's</u> <u>favourite</u> <u>subjects</u>.", "answer": "subjects", "opts": ["Maths", "subjects", "sister's", "favourite"], "extra": "Sửa lại: subject"}, {"type": "tf", "prompt": "Lan: What time do you get up, Nam?\nNam: I get up at 6.30 a.m. After that, I wash my face and have breakfast.\nLan: Do you go to school at seven?\nNam: Yes, I always go to school at seven o'clock.\n\n→ Nam has breakfast at seven o'clock.", "answer": "False", "opts": ["True", "False"], "extra": ""}, {"type": "tf", "prompt": "Hi, my name is Hoa. I am ten years old. I go to Green School. I like reading books and playing football.\n\n→ Hoa studies at Green School.", "answer": "True", "opts": ["True", "False"], "extra": ""}, {"type": "tf", "prompt": "Hi, I'm Nam. This is my school. There is a small playground in my school. After class, my friends and I play football and badminton there. Sometimes we also play hide and seek. The playground is next to the library, so we can go to read books after playing.\n\n→ Nam and his friends can play football and badminton.", "answer": "True", "opts": ["True", "False"], "extra": ""}];
+  let done=0;
+  for(const q of seedQs){
+    await window.fb.addDoc(window.fb.collection(window.db,"examQuestions"),{
+      id:"eq_seed_"+done+"_"+Date.now()+Math.random().toString(36).slice(2),
+      examId:"ex_ioe_k4_ca1_de1",
+      type:q.type,prompt:q.prompt,answer:q.answer,opts:q.opts||[],extra:q.extra||"",audioUrl:"",anyOrder:false
+    });
+    done++;
+  }
+  alert("Đã nhập xong "+done+" câu hỏi vào 'Đề số 1 — CA1'!\n\nLưu ý: đề gốc không kèm đáp án nên đáp án do suy luận ngữ pháp/ngữ cảnh. Hãy kiểm tra lại các câu phát âm và câu có ghi chú 'Cần giáo viên đối chiếu' trước khi cho học sinh làm.");
+  renderAdminExams();populateExamFilterSelect();renderExamQTable();
 }
 
 // ══════ MODAL HELPERS ══════
