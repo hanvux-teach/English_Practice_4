@@ -2676,7 +2676,7 @@ function checkMCQ(btn,c,a){
 function renderFill(q){
   // Build sentence with inline input replacing ___
   const ans=q.answer||"";
-  const maxLen=Math.max(ans.length,3);
+  const maxLen=Math.max(ans.length,1);
   const width=`calc(${maxLen} * (1ch + 8px))`;
   const parts=blankSplit(q.prompt);
   let sentenceHtml="";
@@ -2893,7 +2893,7 @@ function renderListenTF(q){
 // ══ Listen Fill ══
 function renderListenFill(q){
   const ans=q.answer||"";
-  const maxLen=Math.max(ans.length,3);
+  const maxLen=Math.max(ans.length,1);
   const width=`calc(${maxLen} * (1ch + 8px))`;
   const parts=blankSplit(q.prompt);
   let sentenceHtml="";
@@ -2979,7 +2979,7 @@ function renderPicMCQ(q){
 // ══ Image Fill ══
 function renderImgFill(q){
   const ans=q.answer||"";
-  const maxLen=Math.max(ans.length,3);
+  const maxLen=Math.max(ans.length,1);
   const width=`calc(${maxLen} * (1ch + 8px))`;
   const parts=blankSplit(q.prompt);
   let sentenceHtml="";
@@ -3213,7 +3213,7 @@ function rpRenderBody(sq){
       <div class="opts" style="grid-template-columns:1fr">${opts.map(o=>`<button class="obt-multi" onclick="toggleMulti(this,${escJs(o)})"><span class="chk"></span>${esc(o)}</button>`).join("")}</div>
       <button class="btn btn-pur" style="margin-top:10px;width:100%" onclick="rpCheckMulti(${escJs(sq.answer)})">Kiểm tra</button>`;
   }else if(t==="fill"){
-    const ans=sq.answer||"";const maxLen=Math.max(ans.length,3);const width=`calc(${maxLen} * (1ch + 8px))`;
+    const ans=sq.answer||"";const maxLen=Math.max(ans.length,1);const width=`calc(${maxLen} * (1ch + 8px))`;
     const parts=blankSplit(sq.prompt);
     const sentHtml=parts.length>=2
       ?`${esc(parts[0])}<input class="fill-blank" id="rp-fi" maxlength="${maxLen}" style="width:${width}" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')rpCheckFill()" onbeforeinput="if(this.value.length>=${maxLen}&&this.selectionStart===this.selectionEnd&&event.inputType==='insertText')event.preventDefault();" onfocus="this.scrollLeft=0" onclick="this.scrollLeft=0" onkeyup="this.scrollLeft=0" oninput="this.value=this.value.slice(0,${maxLen});this.scrollLeft=0;">${esc(parts.slice(1).join("___"))}`
@@ -3550,7 +3550,7 @@ function exJump(i){
 function exBuild(q){
   const t=q.type,i=exCur;const d=exDraft[i]||(exDraft[i]={});
   if(t==="fill"){
-    const ans=String(q.answer||""),maxLen=Math.max(ans.length,3);
+    const ans=String(q.answer||""),maxLen=Math.max(ans.length,1);
     const inp=`<input class="fill-blank" id="fi" maxlength="${maxLen}" style="width:calc(${maxLen} * (1ch + 8px))" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(d.text||"")}" oninput="exFillInput(this)">`;
     const parts=blankSplit(q.prompt);
     const sent=parts.length>1?exQ(parts[0])+inp+exQ(parts[1]):exQ(parts[0])+" "+inp;
@@ -4475,7 +4475,7 @@ function tItemInner(it){
       return `<button class="${c}" data-act="mtoggle" data-k="${it.key}" data-i="${i}"${locked?" disabled":""}><span class="chk">${s?"✓":""}</span>${esc(o)}</button>`;
     }).join("")+"</div>";
   }else if(k==="fill"){
-    const ans=it.answer||"";const maxLen=Math.max(ans.length,3);const width=`calc(${maxLen} * (1ch + 8px))`;
+    const ans=it.answer||"";const maxLen=Math.max(ans.length,1);const width=`calc(${maxLen} * (1ch + 8px))`;
     const val=locked?(rec.r||""):(draft||"");
     const cls="fill-blank"+(rv?(rec.ok?" ok":" bad"):"");
     const inp=`<input class="${cls}" data-act="fill" data-k="${it.key}" maxlength="${maxLen}" style="width:${width}" autocomplete="off" spellcheck="false" value="${esc(val)}"${locked?" disabled":""}>`;
