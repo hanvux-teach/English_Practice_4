@@ -1714,8 +1714,9 @@ const Q_FORMS={
   <input class="inp" id="qf-answer" placeholder="rabbit">
   <label class="lbl">Audio URL</label>
   <input class="inp" id="qf-audio" placeholder="https://....mp3">
-  <label class="lbl">Hướng dẫn</label>
-  <input class="inp" id="qf-prompt" value="Nghe và chọn từ đúng">
+  <label class="lbl">Câu hỏi hiển thị trên đề (tuỳ chọn — dùng &lt;u&gt;text&lt;/u&gt; để gạch chân)</label>
+  <div class="u-toolbar"><button type="button" class="u-btn" onclick="wrapUnderline('qf-prompt')" title="Gạch chân">U̲</button><span class="u-hint">Bôi đen cụm từ → nhấn nút để gạch chân</span></div>
+  <textarea class="inp" id="qf-prompt" rows="2" placeholder="What does the boy like?"></textarea>
   <label class="lbl">Các lựa chọn (mỗi đáp án 1 dòng)</label>
   <textarea class="inp" id="qf-opts" rows="4" placeholder="rabbit&#10;cat&#10;dog&#10;fish"></textarea>
   <input type="hidden" id="qf-extra" value="">`,
@@ -1755,8 +1756,9 @@ const Q_FORMS={
   <input class="inp" id="qf-extra" placeholder="tiger">`,
   "listen-img":`<label class="lbl">Audio URL</label>
   <input class="inp" id="qf-audio" placeholder="https://....mp3">
-  <label class="lbl">Hướng dẫn</label>
-  <input class="inp" id="qf-prompt" value="Nghe và chọn ảnh đúng">
+  <label class="lbl">Câu hỏi hiển thị trên đề (tuỳ chọn — dùng &lt;u&gt;text&lt;/u&gt; để gạch chân)</label>
+  <div class="u-toolbar"><button type="button" class="u-btn" onclick="wrapUnderline('qf-prompt')" title="Gạch chân">U̲</button><span class="u-hint">Bôi đen cụm từ → nhấn nút để gạch chân</span></div>
+  <textarea class="inp" id="qf-prompt" rows="2" placeholder="Which picture is correct?"></textarea>
   <label class="lbl">Đáp án đúng (URL ảnh)</label>
   <input class="inp" id="qf-answer" placeholder="https://....jpg">
   <label class="lbl">URL ảnh các lựa chọn (mỗi URL 1 dòng)</label>
@@ -1807,8 +1809,9 @@ const Q_FORMS={
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:2px"><input type="checkbox" id="qf-anyorder" style="width:auto;margin:0"> Thứ tự đáp án không quan trọng (friendly = smart đều được)</label>`,
   "listen-multi":`<label class="lbl">Audio URL</label>
     <input class="inp" id="qf-audio" placeholder="https://....mp3">
-    <label class="lbl">Hướng dẫn (hiển thị cho học sinh)</label>
-    <input class="inp" id="qf-prompt" value="Nghe và chọn tất cả đáp án đúng">
+    <label class="lbl">Câu hỏi hiển thị trên đề (tuỳ chọn — dùng &lt;u&gt;text&lt;/u&gt; để gạch chân)</label>
+  <div class="u-toolbar"><button type="button" class="u-btn" onclick="wrapUnderline('qf-prompt')" title="Gạch chân">U̲</button><span class="u-hint">Bôi đen cụm từ → nhấn nút để gạch chân</span></div>
+  <textarea class="inp" id="qf-prompt" rows="2" placeholder="What animals can you hear?"></textarea>
     <label class="lbl">Các đáp án ĐÚNG (mỗi đáp án 1 dòng — tất cả đều phải chọn)</label>
     <textarea class="inp" id="qf-answer" rows="3" placeholder="cat&#10;dog"></textarea>
     <label class="lbl">Tất cả lựa chọn (gồm cả đúng lẫn sai, mỗi dòng 1 lựa chọn)</label>
@@ -3587,7 +3590,7 @@ function exBuild(q){
   const k=T.imgOpts?{box:"img-opts",btn:"img-obt"}:T.phon?{box:"phonopts",btn:"phobt"}:T.tf?{box:"tfopts",btn:"tfbt"}:{box:"opts",btn:"obt"};
   const isSel=j=>T.k==="multi"?(d.sel||[]).includes(j):d.sel===j;
   const label=(o,j)=>T.imgOpts?`<img src="${esc(o)}" alt="" onerror="this.style.display='none'">`:T.tf?(j===0?"✓ ":"✗ ")+esc(o):safeU(o);
-  const qb=String(q.prompt||"").trim()?`<div class="qbox"${T.tf?' style="font-size:16px"':""}>${exQ(q.prompt)}</div>`:"";
+  const qb=String(q.prompt||"").trim()&&!/^Nghe và chọn/.test(String(q.prompt).trim())?`<div class="qbox"${T.tf?' style="font-size:16px"':""}>${exQ(q.prompt)}</div>`:"";
   return `${img}${qb}${snd}${T.k==="multi"?'<div class="multi-hint">Chọn tất cả đáp án đúng (có thể chọn nhiều)</div>':""}
     <div class="${k.box}"${T.k==="multi"?' style="grid-template-columns:1fr"':""}>${d.opts.map((o,j)=>`<button class="${k.btn} exopt${isSel(j)?" selected":""}" onclick="exPick(${j},this)">${label(o,j)}</button>`).join("")}</div>`;
 }
