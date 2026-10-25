@@ -3493,7 +3493,25 @@ function renderExamList(){
 
 // ── Exam engine (kiểu IOE): thanh 10 ô, chốt là khóa, không hiện đúng/sai ──
 let exDone=[],exDraft=[],exCur=0,exPage=0;
-const EX_NATIVE=["mcq","odd","fill","arrange","phonics","err-correct","tf"];
+// Hệ thống hóa các dạng bài: mỗi dạng = 1 "kind" (cách trả lời) + các thành phần phụ (audio / ảnh / đáp án là ảnh)
+//  choice  : chọn 1 đáp án → bấm là chốt luôn (không có nút)
+//  multi   : chọn nhiều đáp án → có nút Answer
+//  fill    : gõ chữ vào chỗ trống → có nút Answer / Enter
+//  arrange : sắp xếp từ thành câu → có nút Answer / Enter
+const EX_TYPES={
+  "mcq":{k:"choice"},"odd":{k:"choice"},
+  "phonics":{k:"choice",phon:1},"err-correct":{k:"choice",phon:1},
+  "tf":{k:"choice",tf:1},
+  "listen":{k:"choice",audio:1,tts:1},"listen-tf":{k:"choice",tf:1,audio:1,tts:1},
+  "pic-mcq":{k:"choice",img:1},
+  "img-mcq":{k:"choice",imgOpts:1},"read-img":{k:"choice",imgOpts:1},"listen-img":{k:"choice",imgOpts:1,audio:1},
+  "mcq-multi":{k:"multi"},"listen-multi":{k:"multi",audio:1},
+  "fill":{k:"fill"},"listen-fill":{k:"fill",audio:1,tts:1},"img-fill":{k:"fill",img:1},
+  "arrange":{k:"arrange"}
+  // chưa làm lại: drag-fill, verb-fill, reading-passage → dùng bộ render cũ (tự khóa khi xong)
+};
+const EX_PLAY='<svg viewBox="0 0 24 24" fill="white" width="20" height="20"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
+function exNeedsBtn(q){const T=EX_TYPES[q.type];return !!T&&T.k!=="choice";}
 function exQ(s){return safeU(s).replace(/\n/g,"<br>");}
 function exWarn(m){const w=document.getElementById("exn-warn");if(w)w.textContent=m||"";}
 function startExam(examId){
@@ -3548,29 +3566,42 @@ function exJump(i){
   exCur=i;quizIdx=i;examRenderQ();
 }
 function exBuild(q){
-  const t=q.type,i=exCur;const d=exDraft[i]||(exDraft[i]={});
-  if(t==="fill"){
+  const T=EX_TYPES[q.type],i=exCur,d=exDraft[i]||(exDraft[i]={});
+  const img=T.img&&q.audioUrl?`<div style="text-align:center;margin-bottom:14px"><img src="${esc(q.audioUrl)}" alt="" style="max-width:100%;max-height:240px;border-radius:var(--r);border:1.5px solid var(--bord);object-fit:contain" onerror="this.style.display='none'"></div>`:"";
+  const snd=T.audio?`<div style="text-align:center;margin-bottom:14px"><button class="lbtn" onclick="playQuestionAudio(${escJs(q.audioUrl||"")},${T.tts?escJs(q.answer):"''"})">${EX_PLAY} Nghe</button></div>`:"";
+  if(T.k==="fill"){
     const ans=String(q.answer||""),maxLen=Math.max(ans.length,1);
     const inp=`<input class="fill-blank" id="fi" maxlength="${maxLen}" style="width:calc(${maxLen} * (1ch + 8px))" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(d.text||"")}" oninput="exFillInput(this)">`;
     const parts=blankSplit(q.prompt);
-    const sent=parts.length>1?exQ(parts[0])+inp+exQ(parts[1]):exQ(parts[0])+" "+inp;
-    return `<div class="fill-sentence">${sent}</div>`;
+    const sent=parts.length>1?exQ(parts[0])+inp+exQ(parts[1]):(q.type==="listen-fill"?"":exQ(parts[0])+" ")+inp;
+    return `${img}${snd}<div class="fill-sentence">${sent}</div>`;
   }
-  if(t==="arrange"){
+  if(T.k==="arrange"){
     if(!d.arr)d.arr={placed:[],bank:shuffled(String(q.answer||"").split(" "))};
     return `<div class="qbox">Sắp xếp thành câu đúng</div>
       <div class="aans" id="aans"></div>
       <div class="wbank" id="wbank" style="margin-top:10px"></div>`;
   }
-  if(!d.opts)d.opts=t==="tf"?["True","False"]:(q.opts&&q.opts.length?shuffled(q.opts):[q.answer]);
-  const k=t==="phonics"||t==="err-correct"?{box:"phonopts",btn:"phobt"}:t==="tf"?{box:"tfopts",btn:"tfbt"}:{box:"opts",btn:"obt"};
-  return `<div class="qbox"${t==="tf"?' style="font-size:16px"':""}>${exQ(q.prompt)}</div>
-    <div class="${k.box}">${d.opts.map((o,j)=>`<button class="${k.btn} exopt${d.sel===j?" selected":""}" onclick="exPick(${j},this)">${t==="tf"?(j===0?"✓ ":"✗ ")+esc(o):safeU(o)}</button>`).join("")}</div>`;
+  // choice / multi
+  if(!d.opts)d.opts=T.tf?["True","False"]:(q.opts&&q.opts.length?shuffled(q.opts):(T.k==="multi"?shuffled(String(q.answer||"").split("|").map(x=>x.trim()).filter(Boolean)):[q.answer]));
+  const k=T.imgOpts?{box:"img-opts",btn:"img-obt"}:T.phon?{box:"phonopts",btn:"phobt"}:T.tf?{box:"tfopts",btn:"tfbt"}:{box:"opts",btn:"obt"};
+  const isSel=j=>T.k==="multi"?(d.sel||[]).includes(j):d.sel===j;
+  const label=(o,j)=>T.imgOpts?`<img src="${esc(o)}" alt="" onerror="this.style.display='none'">`:T.tf?(j===0?"✓ ":"✗ ")+esc(o):safeU(o);
+  const qb=String(q.prompt||"").trim()?`<div class="qbox"${T.tf?' style="font-size:16px"':""}>${exQ(q.prompt)}</div>`:"";
+  return `${img}${qb}${snd}${T.k==="multi"?'<div class="multi-hint">Chọn tất cả đáp án đúng (có thể chọn nhiều)</div>':""}
+    <div class="${k.box}"${T.k==="multi"?' style="grid-template-columns:1fr"':""}>${d.opts.map((o,j)=>`<button class="${k.btn} exopt${isSel(j)?" selected":""}" onclick="exPick(${j},this)">${label(o,j)}</button>`).join("")}</div>`;
 }
 function exFillInput(el){const d=exDraft[exCur];if(d)d.text=el.value;exWarn("");}
 function exPick(j,btn){
-  const d=exDraft[exCur];if(!d||exDone[exCur])return;
-  d.sel=j;exWarn("");
+  const d=exDraft[exCur],q=quizQueue[exCur];if(!d||exDone[exCur]||!q)return;
+  exWarn("");
+  if(EX_TYPES[q.type].k==="multi"){
+    const a=d.sel||(d.sel=[]),at=a.indexOf(j);
+    if(at>=0)a.splice(at,1);else a.push(j);
+    if(btn){btn.classList.toggle("selected",at<0);btn.blur();}
+    return;
+  }
+  d.sel=j;
   document.querySelectorAll("#exam-body .exopt").forEach((b,k)=>b.classList.toggle("selected",k===j));
   if(btn)btn.blur();
   examConfirm(); // kiểu IOE: bấm đáp án là chốt luôn
@@ -3581,11 +3612,11 @@ function examRenderQ(){
   const q=quizQueue[exCur];quizIdx=exCur;
   exPage=Math.floor(exCur/10);exRenderNav();exWarn("");
   const body=document.getElementById("exam-body"),okBtn=document.getElementById("exn-ok");
-  if(EX_NATIVE.includes(q.type)){
-    okBtn.style.visibility=(q.type==="fill"||q.type==="arrange")?"visible":"hidden";
+  if(EX_TYPES[q.type]){
+    okBtn.style.visibility=exNeedsBtn(q)?"visible":"hidden";
     body.innerHTML=exBuild(q);
     if(q.type==="arrange"){arrangeState=exDraft[exCur].arr;renderArrState();}
-    if(q.type==="fill")setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);
+    if(EX_TYPES[q.type].k==="fill")setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);
     return;
   }
   // Các dạng khác (nghe, ảnh, kéo thả, bài đọc...): dùng bộ render cũ, tự khóa khi trả lời xong
@@ -3615,18 +3646,22 @@ function examRenderQ(){
 // Chốt đáp án (nút hoặc Enter): khóa câu, không cho quay lại sửa, không báo đúng/sai
 function examConfirm(){
   if(!examMode||exDone[exCur])return;
-  const q=quizQueue[exCur];if(!q||!EX_NATIVE.includes(q.type))return;
+  const q=quizQueue[exCur],T=q&&EX_TYPES[q.type];if(!T)return;
   const d=exDraft[exCur]||{};let has=false,ok=false;
-  if(q.type==="fill"){
+  if(T.k==="fill"){
     const fi=document.getElementById("fi"),v=(fi?fi.value:"").trim();
     has=!!v;ok=v.toLowerCase()===String(q.answer||"").trim().toLowerCase();
-  }else if(q.type==="arrange"){
+  }else if(T.k==="arrange"){
     const p=(d.arr&&d.arr.placed)||[];
     has=p.length>0;ok=p.join(" ").trim()===String(q.answer||"").trim();
+  }else if(T.k==="multi"){
+    const chosen=new Set((d.sel||[]).map(j=>d.opts[j]));
+    const want=new Set(String(q.answer||"").split("|").map(x=>x.trim()).filter(Boolean));
+    has=chosen.size>0;ok=has&&chosen.size===want.size&&[...chosen].every(v=>want.has(v));
   }else{
     has=d.sel!=null;ok=has&&d.opts[d.sel]===q.answer;
   }
-  if(!has){exWarn(q.type==="fill"?"Hãy điền đáp án trước khi chốt.":q.type==="arrange"?"Hãy sắp xếp câu trước khi chốt.":"Hãy chọn một đáp án trước khi chốt.");return;}
+  if(!has){exWarn(T.k==="fill"?"Hãy điền đáp án trước khi chốt.":T.k==="arrange"?"Hãy sắp xếp câu trước khi chốt.":"Hãy chọn đáp án trước khi chốt.");return;}
   exDone[exCur]=true;if(ok)quizCorrect++;
   examGoNext();
 }
@@ -3646,7 +3681,7 @@ function examSubmitAll(){
 document.addEventListener("keydown",e=>{
   if(!examMode||e.key!=="Enter"||e.isComposing)return;
   const scr=document.getElementById("s-examquiz");if(!scr||!scr.classList.contains("on"))return;
-  const q=quizQueue[exCur];if(!q||(q.type!=="fill"&&q.type!=="arrange"))return;
+  const q=quizQueue[exCur];if(!q||!exNeedsBtn(q))return;
   const t=e.target;if(t&&t.tagName==="BUTTON"&&!t.classList.contains("exopt"))return;
   e.preventDefault();examConfirm();
 });
