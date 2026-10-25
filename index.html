@@ -319,6 +319,22 @@ body.exammode .fill-blank.ok,body.exammode .fill-blank.bad,
 body.exammode .img-obt.ok,body.exammode .img-obt.bad{background:var(--pur-l)!important;border-color:var(--pur-m)!important;color:var(--pur-d)!important}
 body.exammode #exam-body .fb{display:none!important}
 body.exammode #exam-body .nxbt{display:none!important}
+
+/* ── Thi thử IOE: thanh 10 ô ── */
+.exn-bar{display:flex;align-items:center;gap:6px;background:linear-gradient(#ecd3a3,#dcb67a);border-top:3px solid #f4e3c0;border-bottom:3px solid #c39a5c;border-radius:8px;padding:10px 8px;margin-bottom:16px}
+.exn-nums{flex:1;display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;min-width:0}
+.exn-num{height:40px;min-width:0;border-radius:7px;border:2px solid #8e8e8e;background:#6e6e6e;color:#fff;font-size:17px;font-weight:700;padding:0;cursor:default;box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)}
+.exn-num.todo{background:#cf5b40;border-color:#f0a283;cursor:pointer}
+.exn-num.cur{background:#e29a38;border-color:#f6cd62;cursor:pointer}
+.exn-arr{position:relative;flex:0 0 34px;height:40px;border-radius:7px;border:2px solid #f0cf76;background:#c8923f;padding:0;cursor:pointer}
+.exn-arr:disabled{opacity:.4;cursor:default}
+.exn-arr::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border-style:solid}
+.exn-arr.prev::after{border-width:8px 11px 8px 0;border-color:transparent #5b3b12 transparent transparent;margin-left:-2px}
+.exn-arr.next::after{border-width:8px 0 8px 11px;border-color:transparent transparent transparent #5b3b12;margin-left:2px}
+.exn-warn{min-height:18px;margin:10px 0 6px;text-align:center;font-size:13px;font-weight:600;color:var(--red)}
+.exn-foot{justify-content:space-between}
+.phobt.selected{border-color:var(--pur);background:var(--pur-l);color:var(--pur-d)}
+@media(max-width:500px){.exn-num{font-size:13px;height:34px}.exn-arr{flex-basis:26px;height:34px}.exn-nums,.exn-bar{gap:3px}}
 /* ═══ TEST / QUIZ THEO BUỔI ═══ */
 .tfbt.selected{border-color:var(--pur);background:var(--pur-l)}
 .img-obt.selected{border-color:var(--pur);background:var(--pur-l)}
@@ -856,13 +872,13 @@ body.exammode .vf-blank.ok,body.exammode .vf-blank.bad{background:var(--pur-l)!i
       </div>
       <span class="ex-timerbar" id="ex-timer">30:00</span>
     </div>
-    <div class="qhdr">
-      <span class="qtbadge" id="ex-badge"></span>
-      <span style="font-size:12px;color:var(--tx3)" id="ex-ctr"></span>
-      <span style="font-size:13px;font-weight:600;color:var(--teal)" id="ex-live"></span>
-    </div>
-    <div class="qprog"><div class="qpfill" id="ex-pfill" style="width:0%"></div></div>
+    <div class="exn-bar" id="exn-bar"></div>
     <div id="exam-body"></div>
+    <div class="exn-warn" id="exn-warn"></div>
+    <div class="btn-row exn-foot" id="exn-foot">
+      <button class="btn" onclick="examSubmitAll()">Nộp bài</button>
+      <button class="btn btn-pur" id="exn-ok" onclick="examConfirm()">Chốt đáp án ↵</button>
+    </div>
   </div>
 </div>
 
@@ -2639,7 +2655,7 @@ function renderQ(){
   else if(q.type==="reading-passage"){body.innerHTML=renderReadingPassage(q);rpQuizInit(q);}
   else body.innerHTML=renderMCQ(q);
 }
-function nextQ(){quizIdx++;if(examMode){examRenderQ();}else{renderQ();}}
+function nextQ(){if(examMode){exDone[exCur]=true;examGoNext();}else{quizIdx++;renderQ();}}
 
 // Render helpers
 function renderMCQ(q){
@@ -2662,7 +2678,7 @@ function renderFill(q){
   const ans=q.answer||"";
   const maxLen=Math.max(ans.length,3);
   const width=`calc(${maxLen} * (1ch + 8px))`;
-  const parts=(q.prompt||"").split("___");
+  const parts=blankSplit(q.prompt);
   let sentenceHtml="";
   if(parts.length>=2){
     sentenceHtml=esc(parts[0])+`<input class="fill-blank" id="fi" maxlength="${maxLen}" style="width:${width}" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')checkFill()" onbeforeinput="if(this.value.length>=${maxLen}&&this.selectionStart===this.selectionEnd&&event.inputType==='insertText')event.preventDefault();" onfocus="this.scrollLeft=0" onclick="this.scrollLeft=0" onkeyup="this.scrollLeft=0" oninput="
@@ -2879,7 +2895,7 @@ function renderListenFill(q){
   const ans=q.answer||"";
   const maxLen=Math.max(ans.length,3);
   const width=`calc(${maxLen} * (1ch + 8px))`;
-  const parts=(q.prompt||"").split("___");
+  const parts=blankSplit(q.prompt);
   let sentenceHtml="";
   if(parts.length>=2){
     sentenceHtml=esc(parts[0])+`<input class="fill-blank" id="fi" maxlength="${maxLen}" style="width:${width}" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')checkFill()" onbeforeinput="if(this.value.length>=${maxLen}&&this.selectionStart===this.selectionEnd&&event.inputType==='insertText')event.preventDefault();" onfocus="this.scrollLeft=0" onclick="this.scrollLeft=0" onkeyup="this.scrollLeft=0" oninput="this.value=this.value.slice(0,${maxLen});this.scrollLeft=0;">` +esc(parts.slice(1).join("___"));
@@ -2965,7 +2981,7 @@ function renderImgFill(q){
   const ans=q.answer||"";
   const maxLen=Math.max(ans.length,3);
   const width=`calc(${maxLen} * (1ch + 8px))`;
-  const parts=(q.prompt||"").split("___");
+  const parts=blankSplit(q.prompt);
   let sentenceHtml="";
   if(parts.length>=2){
     sentenceHtml=esc(parts[0])+`<input class="fill-blank" id="fi" maxlength="${maxLen}" style="width:${width}" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')checkFill()" onbeforeinput="if(this.value.length>=${maxLen}&&this.selectionStart===this.selectionEnd&&event.inputType==='insertText')event.preventDefault();" onfocus="this.scrollLeft=0" onclick="this.scrollLeft=0" onkeyup="this.scrollLeft=0" oninput="this.value=this.value.slice(0,${maxLen});this.scrollLeft=0;">` +esc(parts.slice(1).join("___"));
@@ -3198,7 +3214,7 @@ function rpRenderBody(sq){
       <button class="btn btn-pur" style="margin-top:10px;width:100%" onclick="rpCheckMulti(${escJs(sq.answer)})">Kiểm tra</button>`;
   }else if(t==="fill"){
     const ans=sq.answer||"";const maxLen=Math.max(ans.length,3);const width=`calc(${maxLen} * (1ch + 8px))`;
-    const parts=(sq.prompt||"").split("___");
+    const parts=blankSplit(sq.prompt);
     const sentHtml=parts.length>=2
       ?`${esc(parts[0])}<input class="fill-blank" id="rp-fi" maxlength="${maxLen}" style="width:${width}" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')rpCheckFill()" onbeforeinput="if(this.value.length>=${maxLen}&&this.selectionStart===this.selectionEnd&&event.inputType==='insertText')event.preventDefault();" onfocus="this.scrollLeft=0" onclick="this.scrollLeft=0" onkeyup="this.scrollLeft=0" oninput="this.value=this.value.slice(0,${maxLen});this.scrollLeft=0;">${esc(parts.slice(1).join("___"))}`
       :`<input class="fill-blank" id="rp-fi" maxlength="${maxLen}" style="width:${width}" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')rpCheckFill()" onbeforeinput="if(this.value.length>=${maxLen}&&this.selectionStart===this.selectionEnd&&event.inputType==='insertText')event.preventDefault();" onfocus="this.scrollLeft=0" onclick="this.scrollLeft=0" onkeyup="this.scrollLeft=0" oninput="this.value=this.value.slice(0,${maxLen});this.scrollLeft=0;">`;
@@ -3475,7 +3491,11 @@ function renderExamList(){
   }).join("");
 }
 
-// ── Exam engine (reuses renderMCQ/renderFill/... and checkX() functions from practice mode) ──
+// ── Exam engine (kiểu IOE): thanh 10 ô, chốt là khóa, không hiện đúng/sai ──
+let exDone=[],exDraft=[],exCur=0,exPage=0;
+const EX_NATIVE=["mcq","odd","fill","arrange","phonics","err-correct","tf"];
+function exQ(s){return safeU(s).replace(/\n/g,"<br>");}
+function exWarn(m){const w=document.getElementById("exn-warn");if(w)w.textContent=m||"";}
 function startExam(examId){
   const exam=getExams().find(e=>e.id===examId);
   if(!exam)return;
@@ -3485,6 +3505,9 @@ function startExam(examId){
   document.getElementById("quiz-body").innerHTML=""; // avoid duplicate #fb/#nb ids with practice screen
   document.body.classList.add("exammode");
   quizQueue=shuffled(pool);quizIdx=0;quizCorrect=0;
+  exDone=[];exDraft=[];exCur=0;exPage=0;
+  document.getElementById("exn-bar").style.display="";
+  document.getElementById("exn-foot").style.display="";
   examDurationSec=(exam.durationMin||30)*60;examSecondsLeft=examDurationSec;
   document.getElementById("exam-quiz-title").textContent=exam.title;
   showScr("s-examquiz");
@@ -3504,24 +3527,71 @@ function examTickDisplay(){
   el.classList.toggle("warn",examSecondsLeft<=300&&examSecondsLeft>60);
   el.classList.toggle("danger",examSecondsLeft<=60);
 }
+// Thanh số câu: 10 ô / trang, xám = đã chốt, đỏ = chưa làm, cam = câu đang làm
+function exRenderNav(){
+  const bar=document.getElementById("exn-bar");if(!bar)return;
+  const total=quizQueue.length,pages=Math.max(1,Math.ceil(total/10));
+  let h=`<button class="exn-arr prev" ${exPage<=0?"disabled":""} onclick="exSetPage(-1)" aria-label="Trang trước"></button><div class="exn-nums">`;
+  for(let i=exPage*10;i<Math.min(total,exPage*10+10);i++){
+    const c=exDone[i]?"done":(i===exCur?"cur":"todo");
+    h+=`<button class="exn-num ${c}" ${exDone[i]?"disabled":""} onclick="exJump(${i})">${i+1}</button>`;
+  }
+  h+=`</div><button class="exn-arr next" ${exPage>=pages-1?"disabled":""} onclick="exSetPage(1)" aria-label="Trang sau"></button>`;
+  bar.innerHTML=h;
+}
+function exSetPage(d){
+  const pages=Math.max(1,Math.ceil(quizQueue.length/10));
+  exPage=Math.min(pages-1,Math.max(0,exPage+d));exRenderNav();
+}
+function exJump(i){
+  if(!examMode||exDone[i]||i===exCur&&document.getElementById("exam-body").innerHTML)return exRenderNav();
+  exCur=i;quizIdx=i;examRenderQ();
+}
+function exBuild(q){
+  const t=q.type,i=exCur;const d=exDraft[i]||(exDraft[i]={});
+  if(t==="fill"){
+    const ans=String(q.answer||""),maxLen=Math.max(ans.length,3);
+    const inp=`<input class="fill-blank" id="fi" maxlength="${maxLen}" style="width:calc(${maxLen} * (1ch + 8px))" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(d.text||"")}" oninput="exFillInput(this)">`;
+    const parts=blankSplit(q.prompt);
+    const sent=parts.length>1?exQ(parts[0])+inp+exQ(parts[1]):exQ(parts[0])+" "+inp;
+    return `<div class="fill-sentence">${sent}</div>`;
+  }
+  if(t==="arrange"){
+    if(!d.arr)d.arr={placed:[],bank:shuffled(String(q.answer||"").split(" "))};
+    return `<div class="qbox">Sắp xếp thành câu đúng</div>
+      <div class="aans" id="aans"></div>
+      <div class="wbank" id="wbank" style="margin-top:10px"></div>`;
+  }
+  if(!d.opts)d.opts=t==="tf"?["True","False"]:(q.opts&&q.opts.length?shuffled(q.opts):[q.answer]);
+  const k=t==="phonics"||t==="err-correct"?{box:"phonopts",btn:"phobt"}:t==="tf"?{box:"tfopts",btn:"tfbt"}:{box:"opts",btn:"obt"};
+  return `<div class="qbox"${t==="tf"?' style="font-size:16px"':""}>${exQ(q.prompt)}</div>
+    <div class="${k.box}">${d.opts.map((o,j)=>`<button class="${k.btn} exopt${d.sel===j?" selected":""}" onclick="exPick(${j},this)">${t==="tf"?(j===0?"✓ ":"✗ ")+esc(o):safeU(o)}</button>`).join("")}</div>`;
+}
+function exFillInput(el){const d=exDraft[exCur];if(d)d.text=el.value;exWarn("");}
+function exPick(j,btn){
+  const d=exDraft[exCur];if(!d||exDone[exCur])return;
+  d.sel=j;exWarn("");
+  document.querySelectorAll("#exam-body .exopt").forEach((b,k)=>b.classList.toggle("selected",k===j));
+  if(btn)btn.blur();
+}
 function examRenderQ(){
   const total=quizQueue.length;
-  if(quizIdx>=total){examShowResult(false);return;}
-  const q=quizQueue[quizIdx];
-  document.getElementById("ex-ctr").textContent=(quizIdx+1)+" / "+total;
-  document.getElementById("ex-live").textContent="✓ "+quizCorrect;
-  document.getElementById("ex-pfill").style.width=(quizIdx/total*100)+"%";
-  const labels={mcq:"Từ vựng",fill:"Điền từ",arrange:"Sắp xếp câu",phonics:"Phiên âm","err-correct":"Sửa lỗi sai",listen:"Bài nghe","listen-tf":"Nghe Đúng/Sai","listen-fill":"Nghe Điền từ",tf:"Đúng / Sai",odd:"Odd one out","img-mcq":"Chọn ảnh","read-img":"Đọc + Ảnh","listen-img":"Nghe + Ảnh","pic-mcq":"Nhìn ảnh chọn chữ","mcq-multi":"Chọn nhiều đáp án","drag-fill":"Kéo thả từ","listen-multi":"Nghe + Chọn nhiều","img-fill":"Nhìn ảnh điền từ","verb-fill":"Chia động từ","reading-passage":"Bài đọc"};
-  document.getElementById("ex-badge").textContent=labels[q.type]||q.type;
-  const body=document.getElementById("exam-body");
-  if(q.type==="mcq"||q.type==="odd")body.innerHTML=renderMCQ(q);
-  else if(q.type==="fill"){body.innerHTML=renderFill(q);setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);}
-  else if(q.type==="arrange"){body.innerHTML=renderArrange(q);arrangeState={placed:[],bank:shuffled(q.answer.split(" "))||[]};renderArrState();}
-  else if(q.type==="phonics"||q.type==="err-correct"){body.innerHTML=renderPhon(q);document.querySelectorAll(".phobt").forEach(b=>{const m=b.getAttribute("onclick").match(/checkPhon\(this,(.+?),(.+?)\)/);if(m){try{b._phVal=JSON.parse(m[1]);}catch(e){}}});}
-  else if(q.type==="listen")body.innerHTML=renderListen(q);
+  if(exCur>=total){examShowResult(false);return;}
+  const q=quizQueue[exCur];quizIdx=exCur;
+  exPage=Math.floor(exCur/10);exRenderNav();exWarn("");
+  const body=document.getElementById("exam-body"),okBtn=document.getElementById("exn-ok");
+  if(EX_NATIVE.includes(q.type)){
+    okBtn.style.visibility="visible";
+    body.innerHTML=exBuild(q);
+    if(q.type==="arrange"){arrangeState=exDraft[exCur].arr;renderArrState();}
+    if(q.type==="fill")setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);
+    return;
+  }
+  // Các dạng khác (nghe, ảnh, kéo thả, bài đọc...): dùng bộ render cũ, tự khóa khi trả lời xong
+  okBtn.style.visibility="hidden";
+  if(q.type==="listen")body.innerHTML=renderListen(q);
   else if(q.type==="listen-tf")body.innerHTML=renderListenTF(q);
   else if(q.type==="listen-fill"){body.innerHTML=renderListenFill(q);setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);}
-  else if(q.type==="tf")body.innerHTML=renderTF(q);
   else if(q.type==="img-mcq")body.innerHTML=renderImgMCQ(q);
   else if(q.type==="read-img")body.innerHTML=renderReadImg(q);
   else if(q.type==="listen-img")body.innerHTML=renderListenImg(q);
@@ -3533,22 +3603,59 @@ function examRenderQ(){
   else if(q.type==="verb-fill"){body.innerHTML=renderVerbFill(q);setTimeout(()=>{const f=document.getElementById("vf-0");if(f)f.focus();},50);}
   else if(q.type==="reading-passage"){body.innerHTML=renderReadingPassage(q);rpQuizInit(q);}
   else body.innerHTML=renderMCQ(q);
-  // Exam mode: no instant reveal — auto-advance as soon as the answer is submitted (Next btn gets .on)
-  const nb=document.getElementById("nb");
+  const nb=document.getElementById("nb"),my=exCur;
   if(nb){
     const mo=new MutationObserver(()=>{
-      if(nb.classList.contains("on")){mo.disconnect();setTimeout(()=>{if(examMode)nextQ();},400);}
+      if(nb.classList.contains("on")){mo.disconnect();setTimeout(()=>{if(examMode&&exCur===my)nextQ();},400);}
     });
     mo.observe(nb,{attributes:true,attributeFilter:["class"]});
   }
 }
+// Chốt đáp án (nút hoặc Enter): khóa câu, không cho quay lại sửa, không báo đúng/sai
+function examConfirm(){
+  if(!examMode||exDone[exCur])return;
+  const q=quizQueue[exCur];if(!q||!EX_NATIVE.includes(q.type))return;
+  const d=exDraft[exCur]||{};let has=false,ok=false;
+  if(q.type==="fill"){
+    const fi=document.getElementById("fi"),v=(fi?fi.value:"").trim();
+    has=!!v;ok=v.toLowerCase()===String(q.answer||"").trim().toLowerCase();
+  }else if(q.type==="arrange"){
+    const p=(d.arr&&d.arr.placed)||[];
+    has=p.length>0;ok=p.join(" ").trim()===String(q.answer||"").trim();
+  }else{
+    has=d.sel!=null;ok=has&&d.opts[d.sel]===q.answer;
+  }
+  if(!has){exWarn(q.type==="fill"?"Hãy điền đáp án trước khi chốt.":q.type==="arrange"?"Hãy sắp xếp câu trước khi chốt.":"Hãy chọn một đáp án trước khi chốt.");return;}
+  exDone[exCur]=true;if(ok)quizCorrect++;
+  examGoNext();
+}
+function examGoNext(){
+  const n=quizQueue.length;
+  for(let k=1;k<=n;k++){
+    const j=(exCur+k)%n;
+    if(!exDone[j]){exCur=j;quizIdx=j;examRenderQ();return;}
+  }
+  examShowResult(false);
+}
+function examSubmitAll(){
+  const left=quizQueue.filter((_,i)=>!exDone[i]).length;
+  if(!confirm(left?"Bạn còn "+left+" câu chưa làm. Nộp bài luôn?":"Nộp bài?"))return;
+  examShowResult(false);
+}
+document.addEventListener("keydown",e=>{
+  if(!examMode||e.key!=="Enter"||e.isComposing)return;
+  const scr=document.getElementById("s-examquiz");if(!scr||!scr.classList.contains("on"))return;
+  const q=quizQueue[exCur];if(!q||!EX_NATIVE.includes(q.type))return;
+  const t=e.target;if(t&&t.tagName==="BUTTON"&&!t.classList.contains("exopt"))return;
+  e.preventDefault();examConfirm();
+});
 async function examShowResult(timeUp){
   if(examTimerId){clearInterval(examTimerId);examTimerId=null;}
   examMode=false;
   document.body.classList.remove("exammode");
   const total=quizQueue.length;const pct=total?Math.round(quizCorrect/total*100):0;
   if(currentUser)await setExamScore(currentUser,examIdG,pct);
-  document.getElementById("ex-pfill").style.width="100%";
+  const _nb=document.getElementById("exn-bar"),_ft=document.getElementById("exn-foot");if(_nb)_nb.style.display="none";if(_ft)_ft.style.display="none";
   const stars=pct>=90?"⭐⭐⭐":pct>=70?"⭐⭐":"⭐";
   const msg=pct>=90?"Xuất sắc!":pct>=70?"Tốt lắm!":pct>=50?"Cần ôn thêm một chút!":"Xem lại và thử lại nhé!";
   document.getElementById("exam-body").innerHTML=`<div class="res-wrap">
@@ -3716,6 +3823,8 @@ function closeMod(id){document.getElementById(id).classList.remove("on");}
 document.addEventListener("click",e=>{if(e.target.classList.contains("modal-bg"))e.target.classList.remove("on");});
 
 // ══════ UTILS ══════
+// Tách câu tại chỗ trống đầu tiên (1 hay nhiều dấu _ đều được): trả [trước, sau] hoặc [cả câu]
+function blankSplit(p){p=String(p||"");const m=p.match(/_+/);return m?[p.slice(0,m.index),p.slice(m.index+m[0].length)]:[p];}
 function shuffled(a){return [...a].sort(()=>Math.random()-.5);}
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 // Safely embed a JS string literal inside an HTML onclick="..." attribute.
@@ -4369,7 +4478,7 @@ function tItemInner(it){
     const val=locked?(rec.r||""):(draft||"");
     const cls="fill-blank"+(rv?(rec.ok?" ok":" bad"):"");
     const inp=`<input class="${cls}" data-act="fill" data-k="${it.key}" maxlength="${maxLen}" style="width:${width}" autocomplete="off" spellcheck="false" value="${esc(val)}"${locked?" disabled":""}>`;
-    const parts=(it.prompt||"").split("___");
+    const parts=blankSplit(it.prompt);
     const sent=parts.length>=2?esc(parts[0])+inp+esc(parts.slice(1).join("___")):esc(it.prompt||"")+inp;
     body=`<div class="fill-sentence">${numB}${sent}</div>`;
   }else if(k==="verbfill"){
