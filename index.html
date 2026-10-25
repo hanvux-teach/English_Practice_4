@@ -877,7 +877,7 @@ body.exammode .vf-blank.ok,body.exammode .vf-blank.bad{background:var(--pur-l)!i
     <div class="exn-warn" id="exn-warn"></div>
     <div class="btn-row exn-foot" id="exn-foot">
       <button class="btn" onclick="examSubmitAll()">Nộp bài</button>
-      <button class="btn btn-pur" id="exn-ok" onclick="examConfirm()">Chốt đáp án ↵</button>
+      <button class="btn btn-pur" id="exn-ok" onclick="examConfirm()">Answer</button>
     </div>
   </div>
 </div>
@@ -3573,6 +3573,7 @@ function exPick(j,btn){
   d.sel=j;exWarn("");
   document.querySelectorAll("#exam-body .exopt").forEach((b,k)=>b.classList.toggle("selected",k===j));
   if(btn)btn.blur();
+  examConfirm(); // kiểu IOE: bấm đáp án là chốt luôn
 }
 function examRenderQ(){
   const total=quizQueue.length;
@@ -3581,7 +3582,7 @@ function examRenderQ(){
   exPage=Math.floor(exCur/10);exRenderNav();exWarn("");
   const body=document.getElementById("exam-body"),okBtn=document.getElementById("exn-ok");
   if(EX_NATIVE.includes(q.type)){
-    okBtn.style.visibility="visible";
+    okBtn.style.visibility=(q.type==="fill"||q.type==="arrange")?"visible":"hidden";
     body.innerHTML=exBuild(q);
     if(q.type==="arrange"){arrangeState=exDraft[exCur].arr;renderArrState();}
     if(q.type==="fill")setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);
@@ -3645,7 +3646,7 @@ function examSubmitAll(){
 document.addEventListener("keydown",e=>{
   if(!examMode||e.key!=="Enter"||e.isComposing)return;
   const scr=document.getElementById("s-examquiz");if(!scr||!scr.classList.contains("on"))return;
-  const q=quizQueue[exCur];if(!q||!EX_NATIVE.includes(q.type))return;
+  const q=quizQueue[exCur];if(!q||(q.type!=="fill"&&q.type!=="arrange"))return;
   const t=e.target;if(t&&t.tagName==="BUTTON"&&!t.classList.contains("exopt"))return;
   e.preventDefault();examConfirm();
 });
