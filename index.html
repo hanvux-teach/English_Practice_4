@@ -3514,6 +3514,35 @@ const EX_TYPES={
   // chưa làm lại: drag-fill, verb-fill, reading-passage → dùng bộ render cũ (tự khóa khi xong)
 };
 const EX_PLAY='<svg viewBox="0 0 24 24" fill="white" width="20" height="20"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
+function exStopAudio(){
+  try{if(currentAudio){currentAudio.onended=currentAudio.onerror=null;currentAudio.pause();}}catch(e){}
+  if(window.speechSynthesis)window.speechSynthesis.cancel();
+}
+// Tự phát khi vào câu; phát xong nút đổi thành Replay
+function exPlayAudio(q){
+  const T=EX_TYPES[q.type];if(!T||!T.audio)return;
+  const mine=exCur;
+  const btn=()=>{const b=document.getElementById("ex-play");return b&&b.isConnected&&exCur===mine?b:null;};
+  const set=(txt,dis)=>{const b=btn();if(b){b.disabled=dis;b.innerHTML=txt;}};
+  const finish=()=>set("↻ Replay",false);
+  const blocked=()=>set(EX_PLAY+" Nghe",false);
+  exStopAudio();
+  set(EX_PLAY+" Đang phát...",true);
+  if(q.audioUrl){
+    currentAudio=new Audio(q.audioUrl);
+    currentAudio.onended=finish;currentAudio.onerror=finish;
+    currentAudio.play().catch(blocked);
+  }else{
+    const text=T.tts?q.answer:"";
+    if(!text||!window.speechSynthesis){finish();return;}
+    speak(text);
+    const t0=Date.now(),iv=setInterval(()=>{
+      if(!btn()){clearInterval(iv);return;}
+      if(!speechSynthesis.speaking&&Date.now()-t0>600){clearInterval(iv);finish();}
+      else if(Date.now()-t0>15000){clearInterval(iv);finish();}
+    },250);
+  }
+}
 function exNeedsBtn(q){const T=EX_TYPES[q.type];return !!T&&T.k!=="choice";}
 function exQ(s){return safeU(s).replace(/\n/g,"<br>");}
 function exWarn(m){const w=document.getElementById("exn-warn");if(w)w.textContent=m||"";}
@@ -3571,7 +3600,7 @@ function exJump(i){
 function exBuild(q){
   const T=EX_TYPES[q.type],i=exCur,d=exDraft[i]||(exDraft[i]={});
   const img=T.img&&q.audioUrl?`<div style="text-align:center;margin-bottom:14px"><img src="${esc(q.audioUrl)}" alt="" style="max-width:100%;max-height:240px;border-radius:var(--r);border:1.5px solid var(--bord);object-fit:contain" onerror="this.style.display='none'"></div>`:"";
-  const snd=T.audio?`<div style="text-align:center;margin-bottom:14px"><button class="lbtn" onclick="playQuestionAudio(${escJs(q.audioUrl||"")},${T.tts?escJs(q.answer):"''"})">${EX_PLAY} Nghe</button></div>`:"";
+  const snd=T.audio?`<div style="text-align:center;margin-bottom:14px"><button class="lbtn" id="ex-play" onclick="exPlayAudio(quizQueue[exCur])">${EX_PLAY} Nghe</button></div>`:"";
   if(T.k==="fill"){
     const ans=String(q.answer||""),maxLen=Math.max(ans.length,1);
     const inp=`<input class="fill-blank" id="fi" maxlength="${maxLen}" style="width:calc(${maxLen} * (1ch + 8px))" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(d.text||"")}" oninput="exFillInput(this)">`;
@@ -3613,12 +3642,14 @@ function examRenderQ(){
   const total=quizQueue.length;
   if(exCur>=total){examShowResult(false);return;}
   const q=quizQueue[exCur];quizIdx=exCur;
+  exStopAudio();
   exPage=Math.floor(exCur/10);exRenderNav();exWarn("");
   const body=document.getElementById("exam-body"),okBtn=document.getElementById("exn-ok");
   if(EX_TYPES[q.type]){
     okBtn.style.visibility=exNeedsBtn(q)?"visible":"hidden";
     body.innerHTML=exBuild(q);
     if(q.type==="arrange"){arrangeState=exDraft[exCur].arr;renderArrState();}
+    if(EX_TYPES[q.type].audio){const my=exCur;setTimeout(()=>{if(examMode&&exCur===my)exPlayAudio(q);},300);}
     if(EX_TYPES[q.type].k==="fill")setTimeout(()=>{const fi=document.getElementById("fi");if(fi)fi.focus();},50);
     return;
   }
@@ -3689,6 +3720,7 @@ document.addEventListener("keydown",e=>{
   e.preventDefault();examConfirm();
 });
 async function examShowResult(timeUp){
+  exStopAudio();
   if(examTimerId){clearInterval(examTimerId);examTimerId=null;}
   examMode=false;
   document.body.classList.remove("exammode");
@@ -3711,6 +3743,7 @@ async function examShowResult(timeUp){
 }
 function exitExam(){
   if(examMode&&!confirm("Thoát bây giờ sẽ không lưu kết quả bài thi. Bạn chắc chứ?"))return;
+  exStopAudio();
   if(examTimerId){clearInterval(examTimerId);examTimerId=null;}
   examMode=false;
   document.body.classList.remove("exammode");
@@ -4767,14 +4800,26 @@ function fbErr(e,col){
   alert("Không lưu được ("+(e&&e.code||"lỗi")+"): "+(e&&e.message||e)+(denied?"\n\n→ Firestore Rules chưa cho phép ghi vào collection \""+col+"\". Hãy thêm rule cho tests, testQuestions, testAttempts (xem hướng dẫn)."
    :""));
 }
+let ADMIN_FOLDER=null;
+function adminOpenFolder(n){ADMIN_FOLDER=n;renderTestList();}
+function adminCloseFolder(){ADMIN_FOLDER=null;renderTestList();}
 function renderTestList(){
   const el=$id("tm-list");if(!el)return;
-  const tests=lessonFolders(getTests()).flatMap(f=>f.tests.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)));
-  if(!tests.length){el.innerHTML='<div class="empty">Chưa có test nào. Bấm "+ Tạo test".</div>';return;}
-  el.innerHTML=`<table class="qtable"><thead><tr><th>Bài test</th><th>Buổi</th><th>Thời gian</th><th>Số câu</th><th>Trạng thái</th><th></th></tr></thead><tbody>${tests.map(t=>{
+  const all=getTests();
+  if(!all.length){el.innerHTML='<div class="empty">Chưa có test nào. Bấm "+ Tạo test".</div>';return;}
+  const folders=lessonFolders(all);
+  const cur=ADMIN_FOLDER!=null&&folders.find(f=>f.name===ADMIN_FOLDER);
+  if(!cur){
+    ADMIN_FOLDER=null;
+    el.innerHTML='<div class="tgrid">'+folders.map(f=>`<div class="tcard" onclick="adminOpenFolder(${escJs(f.name)})"><div class="tc-em">📁</div><div class="tc-name">${esc(f.name)}</div><div class="tc-meta">${f.tests.length} test${f.date?" · "+fmtDate(f.date):""}</div></div>`).join("")+'</div><p style="font-size:12px;color:var(--tx3);margin-top:10px">Mỗi thư mục là 1 buổi học. Muốn chuyển test sang thư mục khác: bấm Sửa rồi đổi ô "Buổi".</p>';
+    return;
+  }
+  const tests=cur.tests.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  el.innerHTML=`<div class="btn-row" style="margin-bottom:10px"><button class="btn btn-sm" onclick="adminCloseFolder()">← Tất cả buổi học</button><strong style="font-size:14px">📁 ${esc(cur.name)}</strong>${cur.date?`<span style="font-size:12px;color:var(--tx3)">${fmtDate(cur.date)}</span>`:""}</div>
+  <table class="qtable"><thead><tr><th>Bài test</th><th>Thời gian</th><th>Số câu</th><th>Trạng thái</th><th></th></tr></thead><tbody>${tests.map(t=>{
     const n=flattenTest(getTestQs(t.id)).total;
     const st=tLive(t)?'<span class="pill live"><span class="dot-live"></span>Đang diễn ra</span>':t.published?'<span class="pill ok">Hiện với HS</span>':'<span class="pill gray">Đang ẩn</span>';
-    return `<tr><td><strong>${esc(t.title)}</strong><br>${assignLabel(t)}</td><td>${esc(t.lesson||"—")}${t.lessonDate?`<br><span style="font-size:11px;color:var(--tx3)">${fmtDate(t.lessonDate)}</span>`:""}</td><td>${t.durationMin||"—"} phút</td><td>${n} câu</td><td>${st}</td>
+    return `<tr><td><strong>${esc(t.title)}</strong><br>${assignLabel(t)}</td><td>${t.durationMin||"—"} phút</td><td>${n} câu</td><td>${st}</td>
       <td><div class="btn-row"><button class="btn btn-sm btn-pur" onclick="openTestDetail('${t.id}')">Quản lý</button>
       <button class="btn btn-sm" onclick="openTestModal('${t.id}')">Sửa</button>
       <button class="btn btn-sm btn-red" onclick="deleteTest('${t.id}')">Xóa</button></div></td></tr>`;}).join("")}</tbody></table>`;
@@ -4782,7 +4827,7 @@ function renderTestList(){
 function openTestModal(id){
   const t=id?getTests().find(x=>x.id===id):null;
   $id("mtt-id").value=id||"";$id("modal-test-title").textContent=id?"Sửa thông tin test":"Tạo test mới";
-  $id("mtt-title").value=t?t.title:"";$id("mtt-lesson").value=t?t.lesson||"":"";$id("mtt-date").value=t?t.lessonDate||"":"";
+  $id("mtt-title").value=t?t.title:"";$id("mtt-lesson").value=t?t.lesson||"":(ADMIN_FOLDER&&ADMIN_FOLDER!=="Khác"?ADMIN_FOLDER:"");$id("mtt-date").value=t?t.lessonDate||"":(()=>{const f=ADMIN_FOLDER&&lessonFolders(getTests()).find(x=>x.name===ADMIN_FOLDER);return f&&f.date||"";})();
   $id("lesson-list").innerHTML=lessonFolders(getTests()).map(f=>`<option value="${esc(f.name)}">`).join("");
   $id("mtt-min").value=t?t.durationMin||30:30;$id("mtt-show").value=t?t.showAnswers||"end":"end";$id("mtt-home").value=t&&t.homeShow==="instant"?"instant":"same";$id("mtt-layout").value=t&&t.layout==="scroll"?"scroll":"paged";
   $id("mtt-pub").checked=t?!!t.published:true;renderAssignBox("mtt-assign",t?t.assignedTo:[]);$id("mtt-err").classList.remove("on");
