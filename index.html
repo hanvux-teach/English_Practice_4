@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" translate="no" class="notranslate">
 <head>
 <meta charset="UTF-8">
+<meta name="google" content="notranslate">
+<meta http-equiv="Content-Language" content="vi">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>English Practice Exercises</title>
 <style>
@@ -440,6 +442,8 @@ body.exammode #exam-body .nxbt{display:none!important}
 @media(max-width:500px){.sc-mode #t-lv{display:none}}
 
 body.exammode .vf-blank.ok,body.exammode .vf-blank.bad{background:var(--pur-l)!important;border-bottom-color:var(--pur-m)!important;color:var(--pur-d)!important}
+body.exammode .df-blank.ok,body.exammode .df-blank.bad,body.exammode .obt-multi.ok,body.exammode .obt-multi.bad{background:var(--pur-l)!important;border-color:var(--pur-m)!important;color:var(--pur-d)!important}
+body.exammode .obt-multi.ok .chk,body.exammode .obt-multi.bad .chk{background:var(--pur)!important;border-color:var(--pur)!important}
 </style>
 </head>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -537,6 +541,7 @@ body.exammode .vf-blank.ok,body.exammode .vf-blank.bad{background:var(--pur-l)!i
   db.collection("examScores").onSnapshot(snap => {
     window.CLOUD_EXAMSCORES = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
     console.log("Cloud examScores:", window.CLOUD_EXAMSCORES.length);
+    if (typeof renderExamMonitor === "function") renderExamMonitor();
     if (typeof renderExamList === "function") renderExamList();
   }, err => console.error("examScores onSnapshot error:", err));
 
@@ -572,7 +577,7 @@ body.exammode .vf-blank.ok,body.exammode .vf-blank.bad{background:var(--pur-l)!i
   };
 })();
 </script>
-<body>
+<body class="notranslate" translate="no">
 <div class="app">
 
 <!-- ═══ LOGIN ═══ -->
@@ -755,6 +760,15 @@ body.exammode .vf-blank.ok,body.exammode .vf-blank.bad{background:var(--pur-l)!i
       </div>
       <p style="font-size:12px;color:var(--tx3);margin-bottom:14px">"Nhập đề mẫu" sẽ tạo 1 đề thi thử Cấp trường với các câu hỏi trích từ đề IOE K4 gốc bạn đã cung cấp (chỉ 1 lần, không tạo trùng).</p>
       <div id="admin-exam-list"></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">
+        <h2 style="font-size:15px;font-weight:600">📡 Điểm &amp; tiến độ thi thử</h2>
+        <select class="inp" id="exm-exam" onchange="renderExamMonitor()" style="margin-bottom:0;max-width:260px"><option value="">Tất cả đề</option></select>
+      </div>
+      <p style="font-size:12px;color:var(--tx3);margin-bottom:10px">Cập nhật theo thời gian thực. Bấm vào một dòng để xem từng câu học sinh làm đúng/sai (kèm đáp án đúng, chỉ giáo viên thấy).</p>
+      <div id="exm-sum" style="font-size:13px;color:var(--tx2);margin-bottom:10px"></div>
+      <div id="exm-wrap" style="overflow-x:auto"></div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
@@ -1155,6 +1169,15 @@ body.exammode .vf-blank.ok,body.exammode .vf-blank.bad{background:var(--pur-l)!i
 </div>
 
 </div><!-- /app -->
+<div class="leave-ov" id="tr-ov" style="z-index:900">
+  <div class="leave-box">
+    <div class="big">🚫</div>
+    <h2>Phát hiện dịch tự động!</h2>
+    <p>Trang đang bị Google Dịch (hoặc công cụ dịch) can thiệp làm sai nội dung bài.</p>
+    <p style="font-size:13px;opacity:.9">Hãy tắt dịch trang (biểu tượng dịch trên thanh địa chỉ → "Hiển thị bản gốc"), rồi tải lại trang.</p>
+    <button onclick="location.reload()">Tải lại trang</button>
+  </div>
+</div>
 <div class="leave-ov" id="leave-ov">
   <div class="leave-box">
     <div class="big">⚠️</div>
@@ -1465,7 +1488,7 @@ function aTab(t){
   if(t==="tests"){renderTestList();}
   if(t==="students")renderStudentList();
   if(t==="scores")renderAdminScores();
-  if(t==="exams"){renderAdminExams();populateExamFilterSelect();renderExamQTable();}
+  if(t==="exams"){renderAdminExams();populateExamFilterSelect();renderExamQTable();renderExamMonitor();}
 }
 
 // ══════ STUDENT TABS ══════
@@ -2658,7 +2681,7 @@ function renderQ(){
   else if(q.type==="reading-passage"){body.innerHTML=renderReadingPassage(q);rpQuizInit(q);}
   else body.innerHTML=renderMCQ(q);
 }
-function nextQ(){if(examMode){exDone[exCur]=true;examGoNext();}else{quizIdx++;renderQ();}}
+function nextQ(){if(examMode){exRecord(exCur,quizCorrect>exQ0);exDone[exCur]=true;examGoNext();}else{quizIdx++;renderQ();}}
 
 // Render helpers
 function renderMCQ(q){
@@ -2707,7 +2730,7 @@ function checkFill(){
   const q=quizQueue[quizIdx];const ok=fi.value.trim().toLowerCase()===q.answer.toLowerCase();
   fi.disabled=true;
   if(ok){fi.value=q.answer;fi.classList.add("ok");}
-  else{fi.classList.add("bad");setTimeout(()=>{if(!fi.disabled)return;fi.value=q.answer;fi.style.color="var(--teal)";},800);}
+  else{fi.classList.add("bad");if(!examMode)setTimeout(()=>{if(!fi.disabled)return;fi.value=q.answer;fi.style.color="var(--teal)";},800);}
   showFB(ok,q.answer);if(ok)quizCorrect++;
   const nb=document.getElementById("nb");if(nb){nb.textContent=quizIdx+1<quizQueue.length?"Câu tiếp theo →":"Xem kết quả →";nb.classList.add("on");}
 }
@@ -3260,6 +3283,17 @@ function rpNext(){
 }
 
 function rpShowResult(){
+  rpShowResult0();
+  if(examMode){
+    const a=document.querySelector("#rp-qarea .rp-qblock");
+    if(a&&a.children.length>=4){
+      a.children[0].style.display="none";a.children[1].style.display="none";
+      a.children[2].textContent="✔ Đã hoàn thành bài đọc";
+      a.children[2].style.cssText="font-size:15px;font-weight:600;margin:6px 0";
+    }
+  }
+}
+function rpShowResult0(){
   const {subQs,correct}=rpQuizState;const total=subQs.length;
   const pct=total?Math.round(correct/total*100):0;
   const stars=pct>=90?"⭐⭐⭐":pct>=70?"⭐⭐":"⭐";
@@ -3276,7 +3310,7 @@ function rpShowResult(){
 function rpCheckMCQ(btn,c,a){
   document.querySelectorAll("#rp-qblock .obt").forEach(b=>b.disabled=true);
   const ok=c===a;btn.classList.add(ok?"ok":"bad");
-  if(!ok)document.querySelectorAll("#rp-qblock .obt").forEach(b=>{if(b.textContent.trim()===a)b.classList.add("ok");});
+  if(!ok&&!examMode)document.querySelectorAll("#rp-qblock .obt").forEach(b=>{if(b.textContent.trim()===a)b.classList.add("ok");});
   rpShowFB(ok,a);
 }
 function rpCheckFill(){
@@ -3285,7 +3319,7 @@ function rpCheckFill(){
   const ok=fi.value.trim().toLowerCase()===sq.answer.toLowerCase();
   fi.disabled=true;
   if(ok){fi.value=sq.answer;fi.classList.add("ok");}
-  else{fi.classList.add("bad");setTimeout(()=>{fi.value=sq.answer;fi.style.color="var(--teal)";},800);}
+  else{fi.classList.add("bad");if(!examMode)setTimeout(()=>{fi.value=sq.answer;fi.style.color="var(--teal)";},800);}
   rpShowFB(ok,sq.answer);
 }
 function rpCheckTF(btn,c,a){
@@ -3307,7 +3341,7 @@ function rpCheckMulti(answerStr){
     const sel=b.classList.contains("sel"),cor=correctSet.has(v);
     if(sel&&cor)b.classList.add("ok");
     else if(sel&&!cor){b.classList.add("bad");allOk=false;}
-    else if(!sel&&cor){b.classList.add("ok-dim");allOk=false;}
+    else if(!sel&&cor){if(!examMode)b.classList.add("ok-dim");allOk=false;}
   });
   rpShowFB(allOk,[...correctSet].join(", "));
 }
@@ -3495,7 +3529,7 @@ function renderExamList(){
 }
 
 // ── Exam engine (kiểu IOE): thanh 10 ô, chốt là khóa, không hiện đúng/sai ──
-let exDone=[],exDraft=[],exCur=0,exPage=0;
+let exDone=[],exDraft=[],exCur=0,exPage=0,exRes={},exQ0=0,exFinished=false,exTab=0,exAway=0,exStarted=0;
 // Hệ thống hóa các dạng bài: mỗi dạng = 1 "kind" (cách trả lời) + các thành phần phụ (audio / ảnh / đáp án là ảnh)
 //  choice  : chọn 1 đáp án → bấm là chốt luôn (không có nút)
 //  multi   : chọn nhiều đáp án → có nút Answer
@@ -3545,6 +3579,38 @@ function exPlayAudio(q){
 }
 function exNeedsBtn(q){const T=EX_TYPES[q.type];return !!T&&T.k!=="choice";}
 function exQ(s){return safeU(s).replace(/\n/g,"<br>");}
+// ── Ghi tiến độ / kết quả từng câu của bài thi thử (lưu trong examScores.progress) ──
+function exProgress(status){
+  const res={};
+  quizQueue.forEach(q=>{if(exRes[q.id]!==undefined)res[q.id]=exRes[q.id];});
+  const vals=Object.values(res);
+  return {status,total:quizQueue.length,answered:vals.length,correct:vals.filter(v=>v===1).length,results:res,
+    order:quizQueue.map(q=>q.id),startedAt:exStarted,updatedAt:Date.now(),tabSwitches:exTab,awaySec:exAway};
+}
+function exDocRef(){
+  const ex=(window.CLOUD_EXAMSCORES||[]).find(x=>x.student===currentUser&&x.examId===examIdG);
+  if(ex&&ex.firestoreId)return window.db.collection("examScores").doc(ex.firestoreId);
+  return window.db.collection("examScores").doc("es_"+examIdG+"_"+String(currentUser).replace(/[^A-Za-z0-9]/g,c=>"_"+c.charCodeAt(0)));
+}
+function exPersist(status,extra){
+  if(!currentUser||!examIdG)return Promise.resolve();
+  const data=Object.assign({student:currentUser,examId:examIdG,progress:exProgress(status)},extra||{});
+  return exDocRef().set(data,{mergeFields:Object.keys(data)}).catch(e=>console.error("exam progress:",e));
+}
+function exRecord(i,ok){
+  const q=quizQueue[i];if(!q||exRes[q.id]!==undefined)return;
+  exRes[q.id]=ok?1:0;
+  exPersist("in_progress");
+}
+function examReviewHtml(){
+  const rows=quizQueue.map((q,i)=>{
+    const r=exRes[q.id];const cls=r===1?"g":r===0?"r":"n";
+    const t=String(q.prompt||"").replace(/<[^>]+>/g,"").replace(/\s+/g," ").trim();
+    const mark=r===1?'<span style="color:var(--teal);font-weight:700">✓ Đúng</span>':r===0?'<span style="color:var(--red);font-weight:700">✗ Sai</span>':'<span style="color:var(--tx3)">— Chưa làm</span>';
+    return `<div class="rv-row"><span class="rv-no ${cls}">${i+1}</span>${mark} <span style="color:var(--tx2)">${esc(t.slice(0,70))}</span></div>`;
+  }).join("");
+  return `<div style="text-align:left;margin:0 0 18px"><h3 style="font-size:14px;margin-bottom:6px">Kết quả từng câu <span style="font-weight:400;font-size:12px;color:var(--tx3)">(không hiện đáp án — thầy/cô sẽ chữa bài)</span></h3>${rows}</div>`;
+}
 function exWarn(m){const w=document.getElementById("exn-warn");if(w)w.textContent=m||"";}
 function startExam(examId){
   const exam=getExams().find(e=>e.id===examId);
@@ -3556,6 +3622,7 @@ function startExam(examId){
   document.body.classList.add("exammode");
   quizQueue=shuffled(pool);quizIdx=0;quizCorrect=0;
   exDone=[];exDraft=[];exCur=0;exPage=0;
+  exRes={};exQ0=0;exFinished=false;exTab=0;exAway=0;exStarted=Date.now();exPersist("in_progress");
   document.getElementById("exn-bar").style.display="";
   document.getElementById("exn-foot").style.display="";
   examDurationSec=(exam.durationMin||30)*60;examSecondsLeft=examDurationSec;
@@ -3641,7 +3708,7 @@ function exPick(j,btn){
 function examRenderQ(){
   const total=quizQueue.length;
   if(exCur>=total){examShowResult(false);return;}
-  const q=quizQueue[exCur];quizIdx=exCur;
+  const q=quizQueue[exCur];quizIdx=exCur;exQ0=quizCorrect;
   exStopAudio();
   exPage=Math.floor(exCur/10);exRenderNav();exWarn("");
   const body=document.getElementById("exam-body"),okBtn=document.getElementById("exn-ok");
@@ -3696,7 +3763,7 @@ function examConfirm(){
     has=d.sel!=null;ok=has&&d.opts[d.sel]===q.answer;
   }
   if(!has){exWarn(T.k==="fill"?"Hãy điền đáp án trước khi chốt.":T.k==="arrange"?"Hãy sắp xếp câu trước khi chốt.":"Hãy chọn đáp án trước khi chốt.");return;}
-  exDone[exCur]=true;if(ok)quizCorrect++;
+  exDone[exCur]=true;if(ok)quizCorrect++;exRecord(exCur,ok);
   examGoNext();
 }
 function examGoNext(){
@@ -3720,12 +3787,13 @@ document.addEventListener("keydown",e=>{
   e.preventDefault();examConfirm();
 });
 async function examShowResult(timeUp){
+  if(exFinished)return;exFinished=true;
   exStopAudio();
   if(examTimerId){clearInterval(examTimerId);examTimerId=null;}
   examMode=false;
   document.body.classList.remove("exammode");
   const total=quizQueue.length;const pct=total?Math.round(quizCorrect/total*100):0;
-  if(currentUser)await setExamScore(currentUser,examIdG,pct);
+  if(currentUser){const old=getExamScore(currentUser,examIdG);await exPersist("submitted",{best:Math.max(old.best||0,pct),attempts:(old.attempts||0)+1,last:pct,lastDate:Date.now()});}
   const _nb=document.getElementById("exn-bar"),_ft=document.getElementById("exn-foot");if(_nb)_nb.style.display="none";if(_ft)_ft.style.display="none";
   const stars=pct>=90?"⭐⭐⭐":pct>=70?"⭐⭐":"⭐";
   const msg=pct>=90?"Xuất sắc!":pct>=70?"Tốt lắm!":pct>=50?"Cần ôn thêm một chút!":"Xem lại và thử lại nhé!";
@@ -3735,6 +3803,7 @@ async function examShowResult(timeUp){
     <div class="res-lbl">${quizCorrect} / ${total} câu đúng — ${examTitleG}</div>
     <div class="res-stars">${stars}</div>
     <div style="color:var(--tx2);font-size:14px;margin-bottom:20px">${msg}</div>
+    ${examReviewHtml()}
     <div class="btn-row" style="justify-content:center">
       <button class="btn btn-pur" onclick="startExam('${examIdG}')">Làm lại</button>
       <button class="btn" onclick="exitExam()">Về trang chủ</button>
@@ -3742,7 +3811,8 @@ async function examShowResult(timeUp){
   </div>`;
 }
 function exitExam(){
-  if(examMode&&!confirm("Thoát bây giờ sẽ không lưu kết quả bài thi. Bạn chắc chứ?"))return;
+  if(examMode&&!confirm("Thoát bây giờ bài thi sẽ không được tính điểm. Bạn chắc chứ?"))return;
+  if(examMode&&!exFinished){exFinished=true;exPersist("abandoned");}
   exStopAudio();
   if(examTimerId){clearInterval(examTimerId);examTimerId=null;}
   examMode=false;
@@ -3888,6 +3958,107 @@ async function seedIOEK4Exam(){
   alert("Đã nhập xong "+done+" câu hỏi vào 'Đề số 1 — CA1'!\n\nLưu ý: đề gốc không kèm đáp án nên đáp án do suy luận ngữ pháp/ngữ cảnh. Hãy kiểm tra lại các câu phát âm và câu có ghi chú 'Cần giáo viên đối chiếu' trước khi cho học sinh làm.");
   renderAdminExams();populateExamFilterSelect();renderExamQTable();
 }
+
+// ══════ GIÁO VIÊN: ĐIỂM & TIẾN ĐỘ THI THỬ ══════
+function exmStatus(sc,ex){
+  const p=sc&&sc.progress;
+  if(!sc)return {k:"none",h:'<span class="pill gray">Chưa làm</span>'};
+  if(!p)return {k:"old",h:'<span class="pill ok">Đã nộp</span>'};
+  if(p.status==="submitted")return {k:"sub",h:'<span class="pill ok">✅ Đã nộp</span>'};
+  if(p.status==="abandoned")return {k:"ab",h:'<span class="pill warn">Thoát giữa chừng</span>'};
+  const stale=Date.now()-(p.updatedAt||0)>(((ex&&ex.durationMin)||30)+5)*60000;
+  return stale?{k:"ab",h:'<span class="pill warn">Bỏ dở</span>'}:{k:"do",h:'<span class="pill live"><span class="dot-live"></span>Đang làm</span>'};
+}
+function exmAgo(ms){
+  if(!ms)return "—";const d=Math.max(0,(Date.now()-ms)/1000);
+  if(d<6)return "vừa xong";if(d<60)return Math.round(d)+"s trước";if(d<3600)return Math.round(d/60)+" phút trước";
+  if(d<86400)return Math.round(d/3600)+" giờ trước";return Math.round(d/86400)+" ngày trước";
+}
+function renderExamMonitor(){
+  const wrap=document.getElementById("exm-wrap");if(!wrap)return;
+  const sel=document.getElementById("exm-exam");
+  const exams=getExams().slice().sort((a,b)=>(a.levelId>b.levelId?1:-1)||(a.order||0)-(b.order||0));
+  if(sel&&sel.options.length!==exams.length+1){
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Tất cả đề</option>'+exams.map(e=>`<option value="${e.id}">${esc(e.title)}</option>`).join("");
+    sel.value=cur;
+  }
+  const fid=sel?sel.value:"";
+  const all=window.CLOUD_EXAMSCORES||[];
+  let rows=[];
+  if(fid){
+    const ex=exams.find(e=>e.id===fid);
+    getStudents().forEach(s=>rows.push({student:s.name,ex,sc:all.find(x=>x.student===s.name&&x.examId===fid)}));
+  }else{
+    all.forEach(sc=>rows.push({student:sc.student,ex:exams.find(e=>e.id===sc.examId),sc}));
+    rows.sort((a,b)=>((b.sc.progress&&b.sc.progress.updatedAt)||b.sc.lastDate||0)-((a.sc.progress&&a.sc.progress.updatedAt)||a.sc.lastDate||0));
+  }
+  if(fid)rows.sort((a,b)=>a.student.localeCompare(b.student));
+  const st=rows.map(r=>exmStatus(r.sc,r.ex));
+  const sum=document.getElementById("exm-sum");
+  if(sum){
+    const n=k=>st.filter(x=>x.k===k).length;
+    sum.innerHTML=`Đang làm: <strong>${n("do")}</strong> · Đã nộp: <strong>${n("sub")+n("old")}</strong> · Bỏ dở: <strong>${n("ab")}</strong>${fid?` · Chưa làm: <strong>${n("none")}</strong>`:""}`;
+  }
+  if(!rows.length){wrap.innerHTML='<div class="empty">Chưa có dữ liệu.</div>';return;}
+  wrap.innerHTML=`<table class="qtable"><thead><tr><th>Học sinh</th>${fid?"":"<th>Đề</th>"}<th>Trạng thái</th><th>Tiến độ từng câu</th><th style="text-align:center">Đã làm</th><th style="text-align:center">Đúng</th><th style="text-align:center">Điểm</th><th style="text-align:center">Cao nhất</th><th style="text-align:center">Lần</th><th style="text-align:center">Rời tab</th><th>Cập nhật</th></tr></thead><tbody>${rows.map((r,i)=>{
+    const sc=r.sc,p=sc&&sc.progress,s=st[i];
+    const title=r.ex?esc(r.ex.title):"(đề đã xóa)";
+    if(!sc)return `<tr><td><strong>${esc(r.student)}</strong></td>${fid?"":`<td>${title}</td>`}<td>${s.h}</td><td colspan="8" style="color:var(--tx3)">—</td></tr>`;
+    let strip='<span style="color:var(--tx3)">—</span>',answered="—",correct="—",pct="—",tab='<span style="color:var(--tx3)">0</span>';
+    let pctCol="var(--tx2)";
+    if(p){
+      let cur=false;
+      strip='<div class="strip">'+(p.order||[]).map(id=>{
+        const v=(p.results||{})[id];let c=v===1?"g":v===0?"r":"";
+        if(v===undefined&&!cur&&s.k==="do"){c+=" cur";cur=true;}
+        return `<i class="${c}"></i>`;
+      }).join("")+'</div>';
+      answered=(p.answered||0)+"/"+(p.total||0);correct=p.correct||0;
+      const v=p.total?Math.round((p.correct||0)/p.total*100):0;
+      pct=(s.k==="sub"?(sc.last!=null?sc.last:v):v)+"%"+(s.k==="do"?"*":"");
+      pctCol=v>=80?"var(--teal)":v>=50?"var(--amb)":"var(--red)";
+      if(p.tabSwitches)tab=`<span class="sw-badge">${p.tabSwitches} lần${p.awaySec?" · "+p.awaySec+"s":""}</span>`;
+    }else if(sc.last!=null){
+      pct=sc.last+"%";pctCol=sc.last>=80?"var(--teal)":sc.last>=50?"var(--amb)":"var(--red)";
+    }
+    const bestCol=(sc.best||0)>=80?"var(--teal)":(sc.best||0)>=50?"var(--amb)":"var(--red)";
+    return `<tr class="tm-row-click" onclick="exmOpen('${sc.firestoreId}')"><td><strong>${esc(r.student)}</strong></td>${fid?"":`<td>${title}</td>`}<td>${s.h}</td><td>${strip}</td>
+      <td style="text-align:center">${answered}</td><td style="text-align:center;color:var(--teal);font-weight:600">${correct}</td>
+      <td style="text-align:center;font-weight:700;color:${pctCol}">${pct}</td>
+      <td style="text-align:center;font-weight:700;color:${bestCol}">${sc.best!=null?sc.best+"%":"—"}</td>
+      <td style="text-align:center;color:var(--tx2)">${sc.attempts||0}</td><td style="text-align:center">${tab}</td>
+      <td style="color:var(--tx3);white-space:nowrap">${exmAgo((p&&p.updatedAt)||sc.lastDate)}</td></tr>`;
+  }).join("")}</tbody></table>
+  <div style="font-size:11px;color:var(--tx3);margin-top:8px">Ô màu: <span style="color:var(--teal)">■ đúng</span> · <span style="color:var(--red)">■ sai</span> · <span style="color:var(--bord2)">■ chưa làm</span> (viền tím = câu đang làm). Điểm có dấu * là điểm tạm tính khi học sinh chưa nộp.</div>`;
+}
+function exmOpen(fid){
+  const sc=(window.CLOUD_EXAMSCORES||[]).find(x=>x.firestoreId===fid);if(!sc)return;
+  TM.attId=null;
+  const ex=getExams().find(e=>e.id===sc.examId);const p=sc.progress;const s=exmStatus(sc,ex);
+  const body=document.getElementById("modal-att-body");
+  let list;
+  if(!p||!(p.order||[]).length){
+    list='<div class="empty">Không có dữ liệu chi tiết từng câu (bài làm trước khi có tính năng theo dõi).</div>';
+  }else{
+    const qs=getExamQs();
+    list=p.order.map((id,i)=>{
+      const q=qs.find(x=>x.id===id);const v=(p.results||{})[id];
+      const cls=v===1?"g":v===0?"r":"n";
+      const pr=q?String(q.prompt||"").replace(/<[^>]+>/g,"").replace(/\s+/g," ").trim().slice(0,160):"(câu đã bị xóa)";
+      let ans=q?String(q.answer||"").replace(/<[^>]+>/g,"").replace(/\n|\|/g,", "):"";
+      if(/^https?:/i.test(ans))ans="(ảnh)";
+      const mark=v===1?'<span style="color:var(--teal);font-weight:700">✓ Đúng</span>':v===0?'<span style="color:var(--red);font-weight:700">✗ Sai</span>':'<span style="color:var(--tx3)">— Chưa làm</span>';
+      return `<div class="rv-row"><span class="rv-no ${cls}">${i+1}</span>${esc(pr)||"<i>(câu nghe/ảnh)</i>"}
+        <div class="rv-ans">${mark}${q?` · Đáp án đúng: <b>${esc(ans)}</b>`:""}</div></div>`;
+    }).join("");
+  }
+  body.innerHTML=`<h3 style="margin-bottom:4px">${esc(sc.student)} — ${esc(ex?ex.title:"")}</h3>
+    <div style="font-size:12px;color:var(--tx2);margin-bottom:10px">${s.h}${p?` · đã làm ${p.answered||0}/${p.total||0} câu · đúng <strong>${p.correct||0}</strong>`:""} · cao nhất <strong>${sc.best||0}%</strong> · ${sc.attempts||0} lần nộp${p&&p.tabSwitches?` · <span class="sw-badge">⚠ rời trang ${p.tabSwitches} lần (${p.awaySec||0}s)</span>`:""}</div>
+    ${list}`;
+  openMod("modal-att");
+}
+setInterval(()=>{const a=document.getElementById("at-exams");if(a&&a.classList.contains("on"))renderExamMonitor();},15000);
 
 // ══════ MODAL HELPERS ══════
 function openMod(id){document.getElementById(id).classList.add("on");}
@@ -5147,6 +5318,7 @@ function onTestQsChanged(){
 const TS={away:false,at:0,kind:null,quiz:0};
 function tsKind(){
   if(!currentUser)return null;
+  if(examMode&&!exFinished&&$id("s-examquiz").classList.contains("on"))return "exam";
   if($id("s-test").classList.contains("on")&&T.att&&T.att.status!=="submitted"&&!T.review&&$id("t-head").style.display!=="none")return "test";
   if($id("s-quiz").classList.contains("on")&&quizQueue.length&&quizIdx<quizQueue.length)return "quiz";
   if($id("s-vocab").classList.contains("on")&&vocabMode==="type"&&vocabQueue.length&&vocabIdx<vocabQueue.length)return "vocab";
@@ -5167,9 +5339,9 @@ function tsBack(){
   if(k==="test"&&T.att&&T.att.status!=="submitted"){
     T.att.tabSwitches=(T.att.tabSwitches||0)+1;n=T.att.tabSwitches;
     if(T.ref)T.ref.update({tabSwitches:firebase.firestore.FieldValue.increment(1),awaySec:firebase.firestore.FieldValue.increment(secs),lastSwitchAt:SERVER_TS(),updatedAt:SERVER_TS()}).catch(e=>console.error(e));
-  }else{TS.quiz++;n=TS.quiz;}
+  }else if(k==="exam"){exTab++;exAway+=secs;n=exTab;exPersist("in_progress");}else{TS.quiz++;n=TS.quiz;}
   $id("leave-cnt").textContent="Lần thứ "+n+" · rời đi "+secs+" giây";
-  $id("leave-note").textContent=k==="test"?"Giáo viên có thể xem số lần bạn rời khỏi trang.":"";
+  $id("leave-note").textContent=(k==="test"||k==="exam")?"Giáo viên có thể xem số lần bạn rời khỏi trang.":"";
   $id("leave-ov").classList.add("on");
   try{if(navigator.vibrate)navigator.vibrate([200,100,200]);}catch(e){}
 }
@@ -5195,6 +5367,35 @@ function tryRestoreSession(){
   sTab("tests");
 }
 
+</script>
+<script>
+// ═══ CHẶN GOOGLE DỊCH / DỊCH TỰ ĐỘNG ═══
+(function(){
+  function lock(){
+    var h=document.documentElement;
+    if(h.getAttribute("translate")!=="no")h.setAttribute("translate","no");
+    var b=document.body;
+    if(b){
+      if(b.getAttribute("translate")!=="no")b.setAttribute("translate","no");
+      if(!b.classList.contains("notranslate"))b.classList.add("notranslate");
+    }
+  }
+  function translated(){
+    var h=document.documentElement;
+    if(/translated-(ltr|rtl)/.test(h.className))return true;
+    return !!document.querySelector("font[style*='vertical-align: inherit'],font[style*='vertical-align:inherit'],#goog-gt-tt,.goog-te-banner-frame,.goog-te-balloon-frame");
+  }
+  var busy=false;
+  function check(){
+    busy=false;lock();
+    if(translated()){var o=document.getElementById("tr-ov");if(o)o.classList.add("on");}
+  }
+  function sched(){if(!busy){busy=true;requestAnimationFrame(check);}}
+  lock();
+  new MutationObserver(sched).observe(document.documentElement,{attributes:true,attributeFilter:["class","translate"],childList:true,subtree:true});
+  window.addEventListener("load",sched);
+  setInterval(sched,3000);
+})();
 </script>
 </body>
 </html>
